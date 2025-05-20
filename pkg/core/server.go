@@ -314,9 +314,14 @@ func (s *OpenVPNServer) Status() ServerStatus {
 	}
 }
 
-// openTunDevice opens and configures a TUN/TAP device
+// openTunDevice creates a TUN device for the VPN server
 func openTunDevice(config Config) (TunnelDevice, error) {
-	// TODO: Implement TUN/TAP device opening on various platforms
-	// This is a placeholder
-	return nil, fmt.Errorf("TUN device opening not implemented")
+	tunConfig := TunTapConfig{
+		DeviceType: config.DeviceType,
+		MTU:        1500, // Default, can be overridden by config in the future
+		Persist:    false,
+	}
+
+	// Create the TUN/TAP device
+	return NewTunTapDevice(tunConfig)
 }
