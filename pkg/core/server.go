@@ -12,12 +12,13 @@ import (
 
 // OpenVPNServer represents an OpenVPN-compatible server implementation
 type OpenVPNServer struct {
-	config     Config
-	listener   net.Listener
-	udpConn    *net.UDPConn
-	device     TunnelDevice
-	running    atomic.Bool
-	conns      sync.Map // map[string]Connection
+	config   Config
+	listener net.Listener
+	udpConn  *net.UDPConn
+	device   TunnelDevice
+	running  atomic.Bool
+	// conns field temporarily removed for linter compatibility
+	// conns      sync.Map // map[string]Connection
 	stats      ServerStats
 	wg         sync.WaitGroup
 	shutdown   chan struct{}
@@ -145,7 +146,9 @@ func (s *OpenVPNServer) handleTCPConnections() {
 			return
 		default:
 			// Set deadline to check context
-			s.listener.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second))
+			if err := s.listener.(*net.TCPListener).SetDeadline(time.Now().Add(time.Second)); err != nil {
+				log.Printf("Error setting TCP listener deadline: %v", err)
+			}
 
 			conn, err := s.listener.Accept()
 			if err != nil {
@@ -181,7 +184,9 @@ func (s *OpenVPNServer) handleUDPConnections() {
 			return
 		default:
 			// Set deadline to check context
-			s.udpConn.SetReadDeadline(time.Now().Add(time.Second))
+			if err := s.udpConn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+				log.Printf("Error setting UDP read deadline: %v", err)
+			}
 
 			n, addr, err := s.udpConn.ReadFromUDP(buffer)
 			if err != nil {
@@ -213,7 +218,9 @@ func (s *OpenVPNServer) handleTCPClient(conn net.Conn) {
 			return
 		default:
 			// Set deadline to check context
-			conn.SetReadDeadline(time.Now().Add(time.Second * 60))
+			if err := conn.SetReadDeadline(time.Now().Add(time.Second * 60)); err != nil {
+				log.Printf("Error setting TCP client read deadline: %v", err)
+			}
 
 			n, err := conn.Read(buffer)
 			if err != nil {
@@ -325,3 +332,26 @@ func openTunDevice(config Config) (TunnelDevice, error) {
 	// Create the TUN/TAP device
 	return NewTunTapDevice(tunConfig)
 }
+
+// Connection handling methods are commented out
+// as they will be used in the future
+/*
+// getConnection returns a connection by its ID
+func (s *OpenVPNServer) getConnection(id string) (Connection, bool) {
+	conn, ok := s.conns.Load(id)
+	if !ok {
+		return nil, false
+	}
+	return conn.(Connection), true
+}
+
+// storeConnection stores a connection
+func (s *OpenVPNServer) storeConnection(id string, conn Connection) {
+	s.conns.Store(id, conn)
+}
+
+// deleteConnection deletes a connection
+func (s *OpenVPNServer) deleteConnection(id string) {
+	s.conns.Delete(id)
+}
+*/

@@ -13,6 +13,15 @@ import (
 	"unsafe"
 )
 
+// Initialization of functions for Linux
+func init() {
+	createTunTapDeviceLinux = linuxCreateTunTapDevice
+	setDeviceMTULinux = linuxSetDeviceMTU
+	setDeviceUpLinux = linuxSetDeviceUp
+	setDeviceAddressLinux = linuxSetDeviceAddress
+	addDeviceRouteLinux = linuxAddDeviceRoute
+}
+
 const (
 	// TUN/TAP device constants for Linux
 	TUNSETIFF     = 0x400454ca
@@ -26,7 +35,7 @@ const (
 )
 
 // Creates a TUN/TAP device on Linux
-func createTunTapDeviceLinux(config TunTapConfig) (*TunTapDevice, error) {
+func linuxCreateTunTapDevice(config TunTapConfig) (*TunTapDevice, error) {
 	var flag int
 
 	// Determine device type
@@ -105,7 +114,7 @@ func createTunTapDeviceLinux(config TunTapConfig) (*TunTapDevice, error) {
 }
 
 // Sets the MTU for a network device on Linux
-func setDeviceMTULinux(deviceName string, mtu int) error {
+func linuxSetDeviceMTU(deviceName string, mtu int) error {
 	cmd := exec.Command("ip", "link", "set", "dev", deviceName, "mtu", strconv.Itoa(mtu))
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set MTU: %w", err)
@@ -114,7 +123,7 @@ func setDeviceMTULinux(deviceName string, mtu int) error {
 }
 
 // Sets the device up on Linux
-func setDeviceUpLinux(deviceName string) error {
+func linuxSetDeviceUp(deviceName string) error {
 	cmd := exec.Command("ip", "link", "set", "dev", deviceName, "up")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set device up: %w", err)
@@ -123,7 +132,7 @@ func setDeviceUpLinux(deviceName string) error {
 }
 
 // Sets an IP address for the TUN/TAP device on Linux
-func setDeviceAddressLinux(deviceName, ipAddr, netmask string) error {
+func linuxSetDeviceAddress(deviceName, ipAddr, netmask string) error {
 	cmd := exec.Command("ip", "addr", "add", ipAddr+"/"+netmask, "dev", deviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set IP address: %w", err)
@@ -132,7 +141,7 @@ func setDeviceAddressLinux(deviceName, ipAddr, netmask string) error {
 }
 
 // Adds a route via the TUN/TAP device on Linux
-func addDeviceRouteLinux(deviceName, network, netmask string) error {
+func linuxAddDeviceRoute(deviceName, network, netmask string) error {
 	cidr := calculateCIDR(netmask)
 	cmd := exec.Command("ip", "route", "add", network+"/"+cidr, "dev", deviceName)
 	if err := cmd.Run(); err != nil {

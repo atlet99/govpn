@@ -85,6 +85,9 @@ type TunnelDevice interface {
 
 	// SetMTU sets the device MTU
 	SetMTU(mtu int) error
+
+	// Interface returns the network interface associated with this device
+	Interface() net.Interface
 }
 
 // Config contains the configuration for the VPN server

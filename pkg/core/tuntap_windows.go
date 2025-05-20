@@ -11,15 +11,24 @@ import (
 	"strings"
 )
 
-// Создаёт TUN/TAP устройство на Windows
-func createTunTapDeviceWindows(config TunTapConfig) (*TunTapDevice, error) {
-	// На Windows для создания TUN/TAP устройств обычно используется драйвер TAP-Windows
-	// Для программного управления можно использовать интерфейс OpenVPN TAP-Windows Adapter
+// Initialization of functions for Windows
+func init() {
+	createTunTapDeviceWindows = windowsCreateTunTapDevice
+	setDeviceMTUWindows = windowsSetDeviceMTU
+	setDeviceUpWindows = windowsSetDeviceUp
+	setDeviceAddressWindows = windowsSetDeviceAddress
+	addDeviceRouteWindows = windowsAddDeviceRoute
+}
 
-	// Определяем GUID для устройства, если предоставлен
-	componentID := "tap0901" // Стандартный Component ID для TAP-Windows Adapter V9
+// Creates a TUN/TAP device on Windows
+func windowsCreateTunTapDevice(config TunTapConfig) (*TunTapDevice, error) {
+	// On Windows, the TAP-Windows driver is typically used for TUN/TAP devices
+	// For programmatic control, we can use the OpenVPN TAP-Windows Adapter interface
 
-	// Поиск существующего TAP устройства
+	// Define GUID for the device if provided
+	componentID := "tap0901" // Standard Component ID for TAP-Windows Adapter V9
+
+	// Search for existing TAP device
 	adapters, err := findTapAdapters(componentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find TAP adapters: %w", err)
@@ -29,37 +38,37 @@ func createTunTapDeviceWindows(config TunTapConfig) (*TunTapDevice, error) {
 		return nil, fmt.Errorf("no TAP adapters found, please install TAP-Windows driver")
 	}
 
-	// Используем первый найденный адаптер
+	// Use the first adapter found
 	adapterName := adapters[0]
 	deviceName := config.Name
 	if deviceName == "" {
 		deviceName = adapterName
 	}
 
-	// На Windows мы используем путь вида \\.\Global\{адаптер-GUID}.tap
+	// On Windows, we use a path like \\.\Global\{adapter-GUID}.tap
 	devicePath := fmt.Sprintf("\\\\.\\Global\\%s.tap", adapterName)
 
-	// Открываем устройство
+	// Open the device
 	file, err := os.OpenFile(devicePath, os.O_RDWR, 0)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open TAP device %s: %w", devicePath, err)
 	}
 
-	// Устанавливаем MTU, если задано
+	// Set MTU if specified
 	if config.MTU > 0 {
 		if err := setDeviceMTUWindows(deviceName, config.MTU); err != nil {
 			file.Close()
 			return nil, fmt.Errorf("failed to set MTU: %w", err)
 		}
 	} else {
-		// Устанавливаем стандартный MTU
+		// Set standard MTU
 		if err := setDeviceMTUWindows(deviceName, 1500); err != nil {
 			file.Close()
 			return nil, fmt.Errorf("failed to set default MTU: %w", err)
 		}
 	}
 
-	// Поднимаем устройство
+	// Bring up the device
 	if err := setDeviceUpWindows(deviceName); err != nil {
 		file.Close()
 		return nil, fmt.Errorf("failed to set device up: %w", err)
@@ -73,17 +82,17 @@ func createTunTapDeviceWindows(config TunTapConfig) (*TunTapDevice, error) {
 	}, nil
 }
 
-// Находит все TAP-адаптеры в системе Windows
+// Finds all TAP adapters in the Windows system
 func findTapAdapters(componentID string) ([]string, error) {
-	// На Windows для поиска TAP адаптеров обычно используется реестр
-	// Здесь мы используем командную строку для получения списка сетевых адаптеров
+	// On Windows, registry is typically used to find TAP adapters
+	// Here we use command line to get the list of network adapters
 	cmd := exec.Command("netsh", "interface", "show", "interface")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get network interfaces: %w", err)
 	}
 
-	// Ищем адаптеры, содержащие "TAP" в названии
+	// Look for adapters containing "TAP" in the name
 	lines := strings.Split(string(output), "\n")
 	var adapters []string
 
@@ -100,8 +109,8 @@ func findTapAdapters(componentID string) ([]string, error) {
 	return adapters, nil
 }
 
-// Устанавливает MTU для сетевого устройства на Windows
-func setDeviceMTUWindows(deviceName string, mtu int) error {
+// Sets the MTU for a network device on Windows
+func windowsSetDeviceMTU(deviceName string, mtu int) error {
 	cmd := exec.Command("netsh", "interface", "ipv4", "set", "subinterface",
 		fmt.Sprintf("\"%s\"", deviceName),
 		fmt.Sprintf("mtu=%d", mtu),
@@ -113,8 +122,8 @@ func setDeviceMTUWindows(deviceName string, mtu int) error {
 	return nil
 }
 
-// Поднимает устройство на Windows
-func setDeviceUpWindows(deviceName string) error {
+// Brings up a device on Windows
+func windowsSetDeviceUp(deviceName string) error {
 	cmd := exec.Command("netsh", "interface", "set", "interface",
 		fmt.Sprintf("\"%s\"", deviceName),
 		"admin=enabled")
@@ -125,9 +134,9 @@ func setDeviceUpWindows(deviceName string) error {
 	return nil
 }
 
-// Устанавливает IP-адрес для TUN/TAP устройства на Windows
-func setDeviceAddressWindows(deviceName, ipAddr, netmask string) error {
-	// Преобразуем маску подсети в префикс CIDR
+// Sets an IP address for a TUN/TAP device on Windows
+func windowsSetDeviceAddress(deviceName, ipAddr, netmask string) error {
+	// Convert subnet mask to CIDR prefix
 	cmd := exec.Command("netsh", "interface", "ipv4", "set", "address",
 		fmt.Sprintf("name=\"%s\"", deviceName),
 		"source=static",
@@ -140,9 +149,9 @@ func setDeviceAddressWindows(deviceName, ipAddr, netmask string) error {
 	return nil
 }
 
-// Добавляет маршрут через TUN/TAP устройство на Windows
-func addDeviceRouteWindows(network, netmask, gateway string) error {
-	// Преобразуем маску подсети в префикс CIDR
+// Adds a route via a TUN/TAP device on Windows
+func windowsAddDeviceRoute(network, netmask, gateway string) error {
+	// Convert subnet mask to CIDR prefix
 	mask := calculateCIDRWindows(netmask)
 
 	cmd := exec.Command("netsh", "interface", "ipv4", "add", "route",
@@ -155,12 +164,11 @@ func addDeviceRouteWindows(network, netmask, gateway string) error {
 	return nil
 }
 
-// Вычисляет CIDR-нотацию из маски подсети для Windows
+// Calculates CIDR notation from a subnet mask for Windows
 func calculateCIDRWindows(netmask string) string {
 	parts := strings.Split(netmask, ".")
-
 	if len(parts) != 4 {
-		return "24" // По умолчанию /24 если неверный формат
+		return "24" // Default to /24 if format is invalid
 	}
 
 	var bits int

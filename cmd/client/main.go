@@ -13,10 +13,12 @@ var (
 	serverAddr = flag.String("server", "127.0.0.1", "VPN server address")
 	serverPort = flag.Int("port", 1194, "VPN server port")
 	proto      = flag.String("proto", "udp", "Protocol (udp or tcp)")
-	certFile   = flag.String("cert", "", "Path to client certificate file")
-	keyFile    = flag.String("key", "", "Path to client key file")
-	caFile     = flag.String("ca", "", "Path to CA file")
-	verbosity  = flag.Int("verb", 4, "Log verbosity level (1-9)")
+
+	// The following parameters are not used yet, but will be needed in the future
+	certFile  = flag.String("cert", "", "Path to client certificate file") //lint:ignore U1000 will be used in the future
+	keyFile   = flag.String("key", "", "Path to client key file")          //lint:ignore U1000 will be used in the future
+	caFile    = flag.String("ca", "", "Path to CA file")                   //lint:ignore U1000 will be used in the future
+	verbosity = flag.Int("verb", 4, "Log verbosity level (1-9)")           //lint:ignore U1000 will be used in the future
 )
 
 func main() {

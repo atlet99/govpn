@@ -2,134 +2,135 @@ package core
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 )
 
-// Константы для работы с IP-пакетами
+// Constants for working with IP packets
 const (
 	IPv4Version      = 4
-	IPv4HeaderSize   = 20
 	IPv4VersionShift = 4
-	IPv4VersionMask  = 0xF0
-	IPv4HdrLenMask   = 0x0F
-	IPv4HdrLenUnit   = 4 // Длина заголовка указывается в 32-битных словах (4 байта)
+	IPv4MinHeaderLen = 20
+	IPv4MaxHeaderLen = 60
+	IPv4HdrLenUnit   = 4 // Header length is specified in 32-bit words (4 bytes)
 )
 
-// Константы для протоколов
+// Constants for protocols
 const (
-	IPProtoICMP = 1
-	IPProtoTCP  = 6
-	IPProtoUDP  = 17
+	ProtoICMP = 1
+	ProtoTCP  = 6
+	ProtoUDP  = 17
 )
 
-// Packet представляет пакет, передаваемый через TUN/TAP устройство
+// Packet represents a packet transmitted through TUN/TAP device
 type Packet struct {
-	Data []byte
+	data []byte
 }
 
-// NewPacket создаёт новый пакет из байтового среза
+// NewPacket creates a new packet from a byte slice
 func NewPacket(data []byte) *Packet {
 	return &Packet{
-		Data: data,
+		data: data,
 	}
 }
 
-// IsIPv4 проверяет, является ли пакет IPv4
+// IsIPv4 checks if the packet is IPv4
 func (p *Packet) IsIPv4() bool {
-	if len(p.Data) < IPv4HeaderSize {
+	if len(p.data) < IPv4MinHeaderLen {
 		return false
 	}
 
-	version := (p.Data[0] & IPv4VersionMask) >> IPv4VersionShift
-	return version == IPv4Version
+	return (p.data[0] >> IPv4VersionShift) == IPv4Version
 }
 
-// GetIPv4Version возвращает версию IP
-func (p *Packet) GetIPv4Version() uint8 {
-	if len(p.Data) < 1 {
+// GetIPv4Version returns the IP version
+func (p *Packet) GetIPv4Version() byte {
+	if len(p.data) < IPv4MinHeaderLen {
 		return 0
 	}
-	return (p.Data[0] & IPv4VersionMask) >> IPv4VersionShift
+	return p.data[0] >> IPv4VersionShift
 }
 
-// GetIPv4HeaderLength возвращает длину заголовка IPv4 в байтах
-func (p *Packet) GetIPv4HeaderLength() uint8 {
-	if len(p.Data) < 1 {
+// GetIPv4HeaderLength returns the IPv4 header length in bytes
+func (p *Packet) GetIPv4HeaderLength() int {
+	if len(p.data) < IPv4MinHeaderLen {
 		return 0
 	}
-	return (p.Data[0] & IPv4HdrLenMask) * IPv4HdrLenUnit
+	return int(p.data[0]&0x0F) * IPv4HdrLenUnit
 }
 
-// GetIPv4Protocol возвращает протокол пакета IPv4
-func (p *Packet) GetIPv4Protocol() uint8 {
-	if len(p.Data) < 10 {
+// GetIPv4Protocol returns the protocol of the IPv4 packet
+func (p *Packet) GetIPv4Protocol() byte {
+	if len(p.data) < 10 {
 		return 0
 	}
-	return p.Data[9]
+	return p.data[9]
 }
 
-// GetIPv4SourceIP возвращает исходный IP-адрес пакета IPv4
+// GetIPv4SourceIP returns the source IP address of the IPv4 packet
 func (p *Packet) GetIPv4SourceIP() net.IP {
-	if len(p.Data) < 16 {
+	if len(p.data) < 16 {
 		return nil
 	}
-	return net.IPv4(p.Data[12], p.Data[13], p.Data[14], p.Data[15])
+	return net.IPv4(p.data[12], p.data[13], p.data[14], p.data[15])
 }
 
-// GetIPv4DestinationIP возвращает целевой IP-адрес пакета IPv4
+// GetIPv4DestinationIP returns the destination IP address of the IPv4 packet
 func (p *Packet) GetIPv4DestinationIP() net.IP {
-	if len(p.Data) < 20 {
+	if len(p.data) < 20 {
 		return nil
 	}
-	return net.IPv4(p.Data[16], p.Data[17], p.Data[18], p.Data[19])
+	return net.IPv4(p.data[16], p.data[17], p.data[18], p.data[19])
 }
 
-// GetIPv4PayloadLength возвращает длину полезной нагрузки IPv4
-func (p *Packet) GetIPv4PayloadLength() uint16 {
-	if len(p.Data) < 4 {
+// GetIPv4PayloadLength returns the length of the IPv4 payload
+func (p *Packet) GetIPv4PayloadLength() int {
+	if len(p.data) < IPv4MinHeaderLen {
 		return 0
 	}
-	totalLen := binary.BigEndian.Uint16(p.Data[2:4])
-	headerLen := uint16(p.GetIPv4HeaderLength())
 
-	if totalLen < headerLen {
+	// Total packet length is stored in bytes 2-3
+	totalLen := int(binary.BigEndian.Uint16(p.data[2:4]))
+	headerLen := p.GetIPv4HeaderLength()
+
+	if headerLen > totalLen {
 		return 0
 	}
 
 	return totalLen - headerLen
 }
 
-// GetIPv4Payload возвращает полезную нагрузку пакета IPv4
+// GetIPv4Payload returns the payload of the IPv4 packet
 func (p *Packet) GetIPv4Payload() []byte {
-	if !p.IsIPv4() {
+	if len(p.data) < IPv4MinHeaderLen {
 		return nil
 	}
 
 	headerLen := p.GetIPv4HeaderLength()
-	if len(p.Data) <= int(headerLen) {
+	totalLen := int(binary.BigEndian.Uint16(p.data[2:4]))
+
+	if headerLen > totalLen || len(p.data) < totalLen {
 		return nil
 	}
 
-	return p.Data[headerLen:]
+	return p.data[headerLen:totalLen]
 }
 
-// SetIPv4SourceIP устанавливает исходный IP-адрес IPv4
-func (p *Packet) SetIPv4SourceIP(ip net.IP) error {
-	if !p.IsIPv4() {
-		return fmt.Errorf("not an IPv4 packet")
+// SetIPv4SourceIP sets the source IP address of IPv4
+func (p *Packet) SetIPv4SourceIP(srcIP net.IP) error {
+	if len(p.data) < 16 {
+		return nil
 	}
 
-	if len(p.Data) < 16 {
-		return fmt.Errorf("packet too short to set source IP")
+	if len(srcIP) == 16 {
+		// Convert IPv6 to IPv4 if possible
+		srcIP = srcIP.To4()
 	}
 
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return fmt.Errorf("not a valid IPv4 address")
+	if len(srcIP) != 4 {
+		return nil
 	}
 
-	copy(p.Data[12:16], ipv4)
+	copy(p.data[12:16], srcIP)
 
 	// Recalculate checksum
 	p.recalculateIPv4Checksum()
@@ -137,22 +138,22 @@ func (p *Packet) SetIPv4SourceIP(ip net.IP) error {
 	return nil
 }
 
-// SetIPv4DestinationIP устанавливает целевой IP-адрес IPv4
-func (p *Packet) SetIPv4DestinationIP(ip net.IP) error {
-	if !p.IsIPv4() {
-		return fmt.Errorf("not an IPv4 packet")
+// SetIPv4DestinationIP sets the destination IP address of IPv4
+func (p *Packet) SetIPv4DestinationIP(dstIP net.IP) error {
+	if len(p.data) < 20 {
+		return nil
 	}
 
-	if len(p.Data) < 20 {
-		return fmt.Errorf("packet too short to set destination IP")
+	if len(dstIP) == 16 {
+		// Convert IPv6 to IPv4 if possible
+		dstIP = dstIP.To4()
 	}
 
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return fmt.Errorf("not a valid IPv4 address")
+	if len(dstIP) != 4 {
+		return nil
 	}
 
-	copy(p.Data[16:20], ipv4)
+	copy(p.data[16:20], dstIP)
 
 	// Recalculate checksum
 	p.recalculateIPv4Checksum()
@@ -160,100 +161,98 @@ func (p *Packet) SetIPv4DestinationIP(ip net.IP) error {
 	return nil
 }
 
-// recalculateIPv4Checksum пересчитывает контрольную сумму заголовка IPv4
+// recalculateIPv4Checksum recalculates the IPv4 header checksum
 func (p *Packet) recalculateIPv4Checksum() {
-	if !p.IsIPv4() {
+	if len(p.data) < IPv4MinHeaderLen {
 		return
 	}
 
 	headerLen := p.GetIPv4HeaderLength()
-	if len(p.Data) < int(headerLen) {
+	if headerLen < IPv4MinHeaderLen || len(p.data) < headerLen {
 		return
 	}
 
-	// Обнуляем текущую контрольную сумму
-	p.Data[10] = 0
-	p.Data[11] = 0
+	// Zero out current checksum
+	p.data[10] = 0
+	p.data[11] = 0
 
-	// Вычисляем новую контрольную сумму
+	// Calculate new checksum
 	var sum uint32
-
-	// Проходим по заголовку как по последовательности 16-битных слов
-	for i := 0; i < int(headerLen); i += 2 {
-		if i+1 < int(headerLen) {
-			sum += uint32(p.Data[i])<<8 | uint32(p.Data[i+1])
+	// Process the header as a sequence of 16-bit words
+	for i := 0; i < headerLen; i += 2 {
+		if i+1 < headerLen {
+			sum += uint32(p.data[i])<<8 | uint32(p.data[i+1])
 		} else {
-			sum += uint32(p.Data[i]) << 8
+			sum += uint32(p.data[i]) << 8
 		}
 	}
 
-	// Складываем перенос
-	for sum > 0xFFFF {
+	// Add carry
+	for sum>>16 != 0 {
 		sum = (sum & 0xFFFF) + (sum >> 16)
 	}
 
-	// Инвертируем биты
-	checksum := ^uint16(sum)
+	// Invert bits
+	sum = ^sum
 
-	// Записываем контрольную сумму обратно в заголовок
-	p.Data[10] = byte(checksum >> 8)
-	p.Data[11] = byte(checksum)
+	// Write checksum back to header
+	p.data[10] = byte(sum >> 8)
+	p.data[11] = byte(sum & 0xFF)
 }
 
-// ProcessPacket обрабатывает пакет данных из TUN/TAP устройства
+// ProcessPacket processes a data packet from a TUN/TAP device
 func ProcessPacket(data []byte) (*Packet, error) {
-	if len(data) == 0 {
-		return nil, fmt.Errorf("empty packet data")
+	if len(data) < IPv4MinHeaderLen {
+		return nil, nil
 	}
 
 	packet := NewPacket(data)
 
-	// Проверка типа пакета
+	// Check packet type
 	if packet.IsIPv4() {
-		// Обработка IPv4 пакета
+		// Process IPv4 packet
 		return packet, nil
 	}
 
-	// Пока поддерживаем только IPv4
-	return nil, fmt.Errorf("unsupported packet type")
+	// Only support IPv4 for now
+	return nil, nil
 }
 
-// CreateIPv4Packet создаёт новый IPv4 пакет с заданными параметрами
-func CreateIPv4Packet(srcIP, dstIP net.IP, protocol uint8, payload []byte) (*Packet, error) {
-	srcIPv4 := srcIP.To4()
-	dstIPv4 := dstIP.To4()
-
-	if srcIPv4 == nil || dstIPv4 == nil {
-		return nil, fmt.Errorf("invalid IPv4 address")
-	}
-
-	// Создаём минимальный заголовок IPv4
-	headerLen := IPv4HeaderSize
+// CreateIPv4Packet creates a new IPv4 packet with the given parameters
+func CreateIPv4Packet(srcIP, dstIP net.IP, protocol byte, payload []byte) *Packet {
+	headerLen := IPv4MinHeaderLen
 	totalLen := headerLen + len(payload)
 
-	if totalLen > 65535 {
-		return nil, fmt.Errorf("packet too large")
+	// Create minimal IPv4 header
+	data := make([]byte, totalLen)
+	if len(payload) > 0 {
+		copy(data[headerLen:], payload)
 	}
 
-	data := make([]byte, totalLen)
+	srcIP = srcIP.To4()
+	dstIP = dstIP.To4()
 
-	// Заполняем поля заголовка
-	data[0] = byte((IPv4Version << IPv4VersionShift) | (headerLen / IPv4HdrLenUnit)) // Версия и длина заголовка
+	// Fill header fields
+	data[0] = byte((IPv4Version << IPv4VersionShift) | (headerLen / IPv4HdrLenUnit)) // Version and header length
 	data[1] = 0                                                                      // Type of Service
-	binary.BigEndian.PutUint16(data[2:4], uint16(totalLen))                          // Общая длина
+	binary.BigEndian.PutUint16(data[2:4], uint16(totalLen))                          // Total length
 	binary.BigEndian.PutUint16(data[4:6], 0)                                         // Identification
-	binary.BigEndian.PutUint16(data[6:8], 0)                                         // Flags & Fragment offset
+	binary.BigEndian.PutUint16(data[6:8], 0)                                         // Flags and fragment offset
 	data[8] = 64                                                                     // TTL
 	data[9] = protocol                                                               // Protocol
-	// Checksum будет вычислена позже
-	copy(data[12:16], srcIPv4) // Source IP
-	copy(data[16:20], dstIPv4) // Destination IP
 
-	// Копируем полезную нагрузку
-	copy(data[headerLen:], payload)
+	// Checksum will be calculated later
+
+	// Source and destination addresses
+	copy(data[12:16], srcIP)
+	copy(data[16:20], dstIP)
+
+	// Copy payload
+	if len(payload) > 0 {
+		copy(data[headerLen:], payload)
+	}
 
 	packet := NewPacket(data)
 	packet.recalculateIPv4Checksum()
-
-	return packet, nil
+	return packet
 }

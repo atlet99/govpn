@@ -1,4 +1,4 @@
-# Бинарные файлы
+# Binary files
 *.exe
 *.exe~
 *.dll
@@ -7,7 +7,7 @@
 govpn-server
 govpn-client
 
-# Временные файлы
+# Temporary files
 *.test
 *.out
 *.prof
@@ -15,7 +15,7 @@ govpn-client
 *.mem
 *.trace
 
-# Зависимости
+# Dependencies
 /vendor/
 
 # IDE
@@ -24,7 +24,7 @@ govpn-client
 *.swp
 *.swo
 
-# Логи и файлы данных
+# Logs and data files
 *.log
 *.db
 *.sqlite
@@ -32,26 +32,26 @@ govpn-client
 openvpn-status.log
 ipp.txt
 
-# Сертификаты и ключи
+# Certificates and keys
 *.key
 *.crt
 *.pem
 ta.key
 
-# Конфигурационные файлы (кроме примеров)
+# Configuration files (excluding examples)
 *.conf
 !deploy/*.conf
 
-# Документация
+# Documentation
 /coverage/
 /doc/
 
-# Артефакты сборки
+# Build artifacts
 /dist/
 /bin/
 /build/
 
-# Специфичные для macOS
+# macOS specific files
 .DS_Store
 .AppleDouble
 .LSOverride 
