@@ -1,0 +1,57 @@
+# Бинарные файлы
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+govpn-server
+govpn-client
+
+# Временные файлы
+*.test
+*.out
+*.prof
+*.cpu
+*.mem
+*.trace
+
+# Зависимости
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Логи и файлы данных
+*.log
+*.db
+*.sqlite
+*.sqlite3
+openvpn-status.log
+ipp.txt
+
+# Сертификаты и ключи
+*.key
+*.crt
+*.pem
+ta.key
+
+# Конфигурационные файлы (кроме примеров)
+*.conf
+!deploy/*.conf
+
+# Документация
+/coverage/
+/doc/
+
+# Артефакты сборки
+/dist/
+/bin/
+/build/
+
+# Специфичные для macOS
+.DS_Store
+.AppleDouble
+.LSOverride 
