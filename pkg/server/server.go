@@ -11,6 +11,17 @@ import (
 	"github.com/atlet99/govpn/pkg/core"
 )
 
+const (
+	// DefaultAPIReadTimeout default timeout for API request reading
+	DefaultAPIReadTimeout = 10 * time.Second
+
+	// DefaultAPIWriteTimeout default timeout for API response writing
+	DefaultAPIWriteTimeout = 10 * time.Second
+
+	// DefaultAPIBasePath default base path for API endpoints
+	DefaultAPIBasePath = "/api/v1"
+)
+
 // Server represents the main application server
 type Server struct {
 	config  *Config
@@ -66,11 +77,11 @@ func (s *Server) Start(ctx context.Context) error {
 		apiConfig := api.Config{
 			ListenAddress: s.config.VPNConfig.APIListenAddress,
 			Port:          s.config.VPNConfig.APIPort,
-			BaseURL:       "/api/v1",
+			BaseURL:       DefaultAPIBasePath,
 			EnableAuth:    s.config.VPNConfig.APIAuth,
 			JWTSecret:     s.config.VPNConfig.APIAuthSecret,
-			ReadTimeout:   10 * time.Second,
-			WriteTimeout:  10 * time.Second,
+			ReadTimeout:   DefaultAPIReadTimeout,
+			WriteTimeout:  DefaultAPIWriteTimeout,
 		}
 
 		s.api = api.NewServer(apiConfig, s.vpn)

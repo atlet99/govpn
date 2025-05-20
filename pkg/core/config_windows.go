@@ -8,9 +8,59 @@ import (
 	"time"
 )
 
+const (
+	// DefaultListenAddress default address to listen on
+	DefaultListenAddress = "0.0.0.0"
+
+	// DefaultPort default OpenVPN port
+	DefaultPort = 1194
+
+	// DefaultServerNetwork default VPN subnet
+	DefaultServerNetwork = "10.8.0.0/24"
+
+	// DefaultMTU default MTU value
+	DefaultMTU = 1500
+
+	// DefaultCipherMode default encryption mode
+	DefaultCipherMode = "AES-256-GCM"
+
+	// DefaultAuthDigest default authentication algorithm
+	DefaultAuthDigest = "SHA512"
+
+	// DefaultTLSVersion default TLS version
+	DefaultTLSVersion = "1.3"
+
+	// DefaultKeepaliveInterval default keepalive interval in seconds
+	DefaultKeepaliveInterval = 10
+
+	// DefaultKeepaliveTimeout default keepalive timeout in seconds
+	DefaultKeepaliveTimeout = 60
+
+	// DefaultMaxClients default maximum number of clients
+	DefaultMaxClients = 100
+
+	// DefaultAPIListenAddress default API listen address
+	DefaultAPIListenAddress = "127.0.0.1"
+
+	// DefaultAPIPort default API port
+	DefaultAPIPort = 8080
+
+	// DefaultHandshakeTimeout default handshake timeout
+	DefaultHandshakeTimeout = 30 * time.Second
+
+	// DefaultReadTimeout default read timeout
+	DefaultReadTimeout = 5 * time.Second
+
+	// DefaultWriteTimeout default write timeout
+	DefaultWriteTimeout = 5 * time.Second
+)
+
 var (
 	// ErrInvalidConfig indicates that the configuration is invalid
 	ErrInvalidConfig = errors.New("invalid configuration")
+
+	// DefaultDNSServers default DNS servers
+	DefaultDNSServers = []string{"8.8.8.8", "8.8.4.4"}
 )
 
 // Config represents VPN server configuration
@@ -78,27 +128,27 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		// Network settings
-		ListenAddress: "0.0.0.0",
-		Port:          1194,
+		ListenAddress: DefaultListenAddress,
+		Port:          DefaultPort,
 		Protocol:      "udp",
 		EnableTCP:     true,
 		EnableUDP:     true,
-		ServerNetwork: "10.8.0.0/24",
+		ServerNetwork: DefaultServerNetwork,
 
 		// Device settings
 		DeviceName:  "govpn0",
 		DeviceType:  "tun",
-		MTU:         1500,
+		MTU:         DefaultMTU,
 		InternalDNS: false,
 
 		// Security
-		CipherMode: "AES-256-GCM",
-		AuthDigest: "SHA512",
-		TLSVersion: "1.3",
+		CipherMode: DefaultCipherMode,
+		AuthDigest: DefaultAuthDigest,
+		TLSVersion: DefaultTLSVersion,
 		AuthMode:   "certificate",
-		TLSEnabled: true,          // Legacy
-		Cipher:     "AES-256-GCM", // Legacy
-		Auth:       "SHA512",      // Legacy
+		TLSEnabled: true,              // Legacy
+		Cipher:     DefaultCipherMode, // Legacy
+		Auth:       DefaultAuthDigest, // Legacy
 
 		// Certificate settings
 		CAPath:         "certs/ca.crt",
@@ -109,30 +159,30 @@ func DefaultConfig() Config {
 		TLSAuthKeyPath: "certs/ta.key",
 
 		// Connection settings
-		KeepaliveInterval: 10,
-		KeepaliveTimeout:  60,
-		MaxClients:        100,                             // Legacy
-		KeepAlive:         time.Duration(10) * time.Second, // Legacy
+		KeepaliveInterval: DefaultKeepaliveInterval,
+		KeepaliveTimeout:  DefaultKeepaliveTimeout,
+		MaxClients:        DefaultMaxClients,
+		KeepAlive:         time.Duration(DefaultKeepaliveInterval) * time.Second, // Legacy
 
 		// API settings
 		EnableAPI:        false,
-		APIListenAddress: "127.0.0.1",
-		APIPort:          8080,
+		APIListenAddress: DefaultAPIListenAddress,
+		APIPort:          DefaultAPIPort,
 		APIAuth:          true,
 		APIAuthSecret:    "",
 
 		// Timing settings
-		HandshakeTimeout: time.Duration(30) * time.Second,
-		ReadTimeout:      time.Duration(5) * time.Second,
-		WriteTimeout:     time.Duration(5) * time.Second,
+		HandshakeTimeout: DefaultHandshakeTimeout,
+		ReadTimeout:      DefaultReadTimeout,
+		WriteTimeout:     DefaultWriteTimeout,
 
 		// Push settings
 		Routes:     []string{},
-		DNSServers: []string{"8.8.8.8", "8.8.4.4"},
+		DNSServers: DefaultDNSServers,
 
 		// Legacy settings
 		CompLZO:          false,
-		KeepAliveTimeout: 60,
+		KeepAliveTimeout: DefaultKeepaliveTimeout,
 		LogLevel:         "info",
 	}
 }

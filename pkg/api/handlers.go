@@ -12,6 +12,47 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+const (
+	// MaxIdentifierLength maximum length of an identifier
+	MaxIdentifierLength = 64
+
+	// MaxDomainNameLength maximum length of a domain name
+	MaxDomainNameLength = 255
+
+	// MaxUsernameLength maximum length of a username
+	MaxUsernameLength = 32
+
+	// MinPortNumber minimum port number
+	MinPortNumber = 1
+
+	// MaxPortNumber maximum port number
+	MaxPortNumber = 65535
+)
+
+// Allowed values for encryption
+var (
+	// AllowedCiphers list of allowed encryption algorithms
+	AllowedCiphers = map[string]bool{
+		"AES-128-GCM":       true,
+		"AES-256-GCM":       true,
+		"CHACHA20-POLY1305": true,
+	}
+
+	// AllowedAuthDigests list of allowed authentication algorithms
+	AllowedAuthDigests = map[string]bool{
+		"SHA256": true,
+		"SHA384": true,
+		"SHA512": true,
+	}
+
+	// AllowedProtocols list of allowed protocols
+	AllowedProtocols = map[string]bool{
+		"tcp":  true,
+		"udp":  true,
+		"both": true,
+	}
+)
+
 // Response represents a standardized API response
 type Response struct {
 	Success bool        `json:"success"`
@@ -580,7 +621,7 @@ func validateIdentifier(id string) bool {
 			return false
 		}
 	}
-	return id != "" && len(id) <= 64
+	return id != "" && len(id) <= MaxIdentifierLength
 }
 
 // validateDomainName checks if a domain name is valid
@@ -592,7 +633,7 @@ func validateDomainName(domain string) bool {
 			return false
 		}
 	}
-	return domain != "" && len(domain) <= 255 && !strings.Contains(domain, "..")
+	return domain != "" && len(domain) <= MaxDomainNameLength && !strings.Contains(domain, "..")
 }
 
 // validateUsername checks if a username is valid
@@ -604,45 +645,35 @@ func validateUsername(username string) bool {
 			return false
 		}
 	}
-	return username != "" && len(username) <= 32
+	return username != "" && len(username) <= MaxUsernameLength
 }
 
 // validateConfigUpdate validates configuration update data
 func validateConfigUpdate(config map[string]interface{}) error {
 	// Check port
 	if port, ok := config["port"].(float64); ok {
-		if port < 1 || port > 65535 {
+		if port < MinPortNumber || port > MaxPortNumber {
 			return fmt.Errorf("invalid port number")
 		}
 	}
 
 	// Check protocol
 	if protocol, ok := config["protocol"].(string); ok {
-		if protocol != "tcp" && protocol != "udp" && protocol != "both" {
+		if !AllowedProtocols[protocol] {
 			return fmt.Errorf("invalid protocol, must be tcp, udp, or both")
 		}
 	}
 
 	// Check cipher
 	if cipher, ok := config["cipher"].(string); ok {
-		allowedCiphers := map[string]bool{
-			"AES-128-GCM":       true,
-			"AES-256-GCM":       true,
-			"CHACHA20-POLY1305": true,
-		}
-		if !allowedCiphers[cipher] {
+		if !AllowedCiphers[cipher] {
 			return fmt.Errorf("unsupported cipher")
 		}
 	}
 
 	// Check auth digest
 	if auth, ok := config["auth"].(string); ok {
-		allowedAuths := map[string]bool{
-			"SHA256": true,
-			"SHA384": true,
-			"SHA512": true,
-		}
-		if !allowedAuths[auth] {
+		if !AllowedAuthDigests[auth] {
 			return fmt.Errorf("unsupported auth digest")
 		}
 	}

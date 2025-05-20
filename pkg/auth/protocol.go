@@ -84,7 +84,10 @@ func NewOpenVPNSession(tlsConfig *tls.Config, tlsAuthKey []byte) *OpenVPNSession
 	sessionID := make([]byte, SESSION_ID_LENGTH)
 	if _, err := io.ReadFull(bytes.NewReader(tlsAuthKey[:SESSION_ID_LENGTH]), sessionID); err != nil {
 		// In case of error, use random data
-		_, _ = io.ReadFull(rand.Reader, sessionID)
+		if randErr := fillRandomBytes(sessionID); randErr != nil {
+			// Log the error but continue with potentially incomplete random data
+			fmt.Printf("Warning: Failed to generate secure random session ID: %v\n", randErr)
+		}
 	}
 
 	return &OpenVPNSession{
@@ -95,6 +98,18 @@ func NewOpenVPNSession(tlsConfig *tls.Config, tlsAuthKey []byte) *OpenVPNSession
 		LastPacketTime: time.Now(),
 		IsHandshaking:  true,
 	}
+}
+
+// fillRandomBytes fills a byte slice with cryptographically secure random data
+func fillRandomBytes(data []byte) error {
+	n, err := io.ReadFull(rand.Reader, data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return fmt.Errorf("failed to generate %d random bytes, got only %d", len(data), n)
+	}
+	return nil
 }
 
 // NewPacket creates a new OpenVPN packet
@@ -183,7 +198,11 @@ func (p *OpenVPNPacket) VerifyHMAC(key []byte) bool {
 		return false
 	}
 
-	packetData, _ := p.Marshal()
+	packetData, err := p.Marshal()
+	if err != nil {
+		return false
+	}
+
 	h := hmac.New(sha256.New, key)
 	h.Write(packetData)
 	calculatedHMAC := h.Sum(nil)
@@ -192,11 +211,16 @@ func (p *OpenVPNPacket) VerifyHMAC(key []byte) bool {
 }
 
 // AddHMAC adds an HMAC to a packet
-func (p *OpenVPNPacket) AddHMAC(key []byte) {
-	packetData, _ := p.Marshal()
+func (p *OpenVPNPacket) AddHMAC(key []byte) error {
+	packetData, err := p.Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to marshal packet: %w", err)
+	}
+
 	h := hmac.New(sha256.New, key)
 	h.Write(packetData)
 	p.HMAC = h.Sum(nil)
+	return nil
 }
 
 // ProcessClientHandshake processes a client handshake packet
@@ -222,13 +246,15 @@ func (s *OpenVPNSession) ProcessClientHandshake(packet *OpenVPNPacket) (*OpenVPN
 
 	// Add HMAC if TLS authentication is enabled
 	if s.TLSAuthKey != nil {
-		responsePacket.AddHMAC(s.TLSAuthKey)
+		if err := responsePacket.AddHMAC(s.TLSAuthKey); err != nil {
+			return nil, fmt.Errorf("failed to add HMAC to response packet: %w", err)
+		}
 	}
 
 	return responsePacket, nil
 }
 
-// UpdatePushOptions обновляет опции push для сессии
+// UpdatePushOptions updates push options for the session
 func (s *OpenVPNSession) UpdatePushOptions(options PushOptions) {
 	s.PushOptions = &options
 }
@@ -289,7 +315,9 @@ func (s *OpenVPNSession) ProcessControlPacket(packet *OpenVPNPacket) (*OpenVPNPa
 
 		// Add HMAC if TLS authentication is enabled
 		if s.TLSAuthKey != nil {
-			ackPacket.AddHMAC(s.TLSAuthKey)
+			if err := ackPacket.AddHMAC(s.TLSAuthKey); err != nil {
+				return nil, fmt.Errorf("failed to add HMAC to ACK packet: %w", err)
+			}
 		}
 
 		return ackPacket, nil
@@ -330,7 +358,9 @@ func (s *OpenVPNSession) CreateDataPacket(data []byte) (*OpenVPNPacket, error) {
 
 	// Add HMAC if TLS authentication is enabled
 	if s.TLSAuthKey != nil {
-		packet.AddHMAC(s.TLSAuthKey)
+		if err := packet.AddHMAC(s.TLSAuthKey); err != nil {
+			return nil, fmt.Errorf("failed to add HMAC to data packet: %w", err)
+		}
 	}
 
 	return packet, nil

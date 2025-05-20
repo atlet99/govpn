@@ -17,24 +17,62 @@ import (
 	"github.com/atlet99/govpn/pkg/server"
 )
 
+const (
+	// DefaultPort default OpenVPN port
+	DefaultPort = 1194
+
+	// DefaultProtocol default protocol
+	DefaultProtocol = "udp"
+
+	// DefaultListenAddress default address to listen on
+	DefaultListenAddress = "0.0.0.0"
+
+	// DefaultDevice default device type
+	DefaultDevice = "tun"
+
+	// DefaultServerAddr default VPN server address
+	DefaultServerAddr = "10.8.0.0"
+
+	// DefaultServerMask default VPN server subnet mask
+	DefaultServerMask = "255.255.255.0"
+
+	// DefaultCipher default encryption algorithm
+	DefaultCipher = "AES-256-GCM"
+
+	// DefaultAuth default authentication algorithm
+	DefaultAuth = "SHA256"
+
+	// DefaultKeepalive default keepalive interval
+	DefaultKeepalive = 10
+
+	// DefaultKeepaliveTimeout default keepalive timeout
+	DefaultKeepaliveTimeout = 120
+
+	// DefaultAPIPort default API port
+	DefaultAPIPort = 8080
+
+	// DefaultAPIListenAddress default API listen address
+	DefaultAPIListenAddress = "127.0.0.1"
+)
+
 var (
 	configFile    = flag.String("config", "", "Path to OpenVPN configuration file")
-	port          = flag.Int("port", 1194, "Port to listen on")
-	proto         = flag.String("proto", "udp", "Protocol (udp or tcp)")
-	listenAddr    = flag.String("listen", "0.0.0.0", "Address to listen on")
-	device        = flag.String("dev", "tun", "Device type (tun or tap)")
-	serverAddr    = flag.String("server", "10.8.0.0", "VPN server subnet")
-	serverMask    = flag.String("mask", "255.255.255.0", "VPN server subnet mask")
+	port          = flag.Int("port", DefaultPort, "Port to listen on")
+	proto         = flag.String("proto", DefaultProtocol, "Protocol (udp or tcp)")
+	listenAddr    = flag.String("listen", DefaultListenAddress, "Address to listen on")
+	device        = flag.String("dev", DefaultDevice, "Device type (tun or tap)")
+	serverAddr    = flag.String("server", DefaultServerAddr, "VPN server subnet")
+	serverMask    = flag.String("mask", DefaultServerMask, "VPN server subnet mask")
 	certFile      = flag.String("cert", "", "Path to server certificate file")
 	keyFile       = flag.String("key", "", "Path to server key file")
 	caFile        = flag.String("ca", "", "Path to CA file")
-	cipher        = flag.String("cipher", "AES-256-GCM", "Encryption cipher")
-	auth          = flag.String("auth", "SHA256", "Authentication algorithm")
-	keepalive     = flag.Int("keepalive", 10, "Keepalive interval in seconds")
-	keepTimeout   = flag.Int("keepalive-timeout", 120, "Keepalive timeout in seconds")
+	cipher        = flag.String("cipher", DefaultCipher, "Encryption cipher")
+	auth          = flag.String("auth", DefaultAuth, "Authentication algorithm")
+	keepalive     = flag.Int("keepalive", DefaultKeepalive, "Keepalive interval in seconds")
+	keepTimeout   = flag.Int("keepalive-timeout", DefaultKeepaliveTimeout, "Keepalive timeout in seconds")
 	enableAPI     = flag.Bool("api", false, "Enable REST API")
-	apiPort       = flag.Int("api-port", 8080, "REST API port")
-	apiListenAddr = flag.String("api-listen", "127.0.0.1", "REST API listen address")
+	apiPort       = flag.Int("api-port", DefaultAPIPort, "REST API port")
+	apiListenAddr = flag.String("api-listen", DefaultAPIListenAddress, "REST API listen address")
 	apiAuth       = flag.Bool("api-auth", false, "Enable API authentication")
 	apiAuthSecret = flag.String("api-auth-secret", "", "API authentication secret key")
 )

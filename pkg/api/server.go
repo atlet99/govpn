@@ -12,6 +12,17 @@ import (
 	"github.com/atlet99/govpn/pkg/core"
 )
 
+const (
+	// DefaultRateLimitRequests maximum number of requests in the time window
+	DefaultRateLimitRequests = 100
+
+	// DefaultRateLimitWindow time window for rate limiting
+	DefaultRateLimitWindow = 1 * time.Minute
+
+	// DefaultShutdownTimeout timeout for graceful server shutdown
+	DefaultShutdownTimeout = 5 * time.Second
+)
+
 // Server represents the REST API server
 type Server struct {
 	config      Config
@@ -53,7 +64,7 @@ func NewServer(config Config, vpnServer *core.OpenVPNServer) *Server {
 		config:      config,
 		vpnServer:   vpnServer,
 		router:      http.NewServeMux(),
-		rateLimiter: newRateLimiter(100, 1*time.Minute), // Rate limit: 100 requests per minute
+		rateLimiter: newRateLimiter(DefaultRateLimitRequests, DefaultRateLimitWindow),
 	}
 
 	// Register routes
@@ -95,7 +106,7 @@ func (s *Server) Stop() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultShutdownTimeout)
 	defer cancel()
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
