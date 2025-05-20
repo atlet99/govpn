@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/atlet99/govpn/pkg/compat"
 	"github.com/atlet99/govpn/pkg/core"
@@ -66,7 +67,7 @@ func main() {
 			CAPath:           *caFile,
 			Cipher:           *cipher,
 			Auth:             *auth,
-			KeepAlive:        *keepalive,
+			KeepAlive:        time.Duration(*keepalive) * time.Second,
 			KeepAliveTimeout: *keepTimeout,
 		}
 	}
@@ -131,7 +132,7 @@ func convertConfig(openvpnConfig map[string]interface{}) core.Config {
 		CompLZO:          getBoolValue(openvpnConfig, "comp-lzo", false),
 		Cipher:           getStringValue(openvpnConfig, "cipher", "AES-256-GCM"),
 		Auth:             getStringValue(openvpnConfig, "auth", "SHA256"),
-		KeepAlive:        getIntValue(openvpnConfig, "keepalive", 10),
+		KeepAlive:        time.Duration(getIntValue(openvpnConfig, "keepalive", 10)) * time.Second,
 		KeepAliveTimeout: getIntValue(openvpnConfig, "keepalive-timeout", 120),
 	}
 

@@ -90,27 +90,6 @@ type TunnelDevice interface {
 	Interface() net.Interface
 }
 
-// Config contains the configuration for the VPN server
-type Config struct {
-	DeviceType       string   // Device type ("tun" or "tap")
-	ListenAddress    string   // Address to listen on
-	Protocol         string   // Protocol ("udp" or "tcp")
-	Port             int      // Port to listen on
-	ServerNetwork    string   // VPN server subnet (CIDR)
-	Routes           []string // Routes
-	DNSServers       []string // DNS servers
-	LogLevel         string   // Logging level
-	CertPath         string   // Path to certificate
-	KeyPath          string   // Path to key
-	CAPath           string   // Path to CA
-	CRLPath          string   // Path to CRL
-	CompLZO          bool     // Use LZO compression
-	Cipher           string   // Encryption cipher
-	Auth             string   // Authentication algorithm
-	KeepAlive        int      // Keepalive interval in seconds
-	KeepAliveTimeout int      // Keepalive timeout in seconds
-}
-
 // VPNOption represents an option function for configuring the VPN server
 type VPNOption func(*Config)
 

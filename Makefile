@@ -2,20 +2,42 @@
 BINARY_NAME := govpn
 SERVER_BINARY := govpn-server
 CLIENT_BINARY := govpn-client
+CERTS_BINARY := govpn-certs
 OUTPUT_DIR := bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 SERVER_CMD_DIR := cmd/server
 CLIENT_CMD_DIR := cmd/client
+CERTS_CMD_DIR := cmd/generate_certs
+CERTS_DIR := certs
+GOPATH ?= $(shell go env GOPATH)
+GOLANGCI_LINT = $(GOPATH)/bin/golangci-lint
+STATICCHECK = $(GOPATH)/bin/staticcheck
 
 # Ensure the output directory exists
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
 
+# Ensure certificates directory exists
+$(CERTS_DIR):
+	@mkdir -p $(CERTS_DIR)
+
 # Default target
 .PHONY: default
 default: fmt vet lint staticcheck build test
+
+# Build and run the certificate generator
+.PHONY: generate-certs
+generate-certs: $(CERTS_DIR)
+	@echo "Generating certificates..."
+	go run ./$(CERTS_CMD_DIR) -out $(CERTS_DIR)
+
+# Build the certificate generator
+.PHONY: build-certs
+build-certs: $(OUTPUT_DIR)
+	@echo "Building $(CERTS_BINARY) with version $(VERSION)..."
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY) ./$(CERTS_CMD_DIR)
 
 # Build and run the server locally
 .PHONY: run-server
@@ -74,9 +96,9 @@ build-client: $(OUTPUT_DIR)
 	@echo "Building $(CLIENT_BINARY) with version $(VERSION)..."
 	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CLIENT_BINARY) ./$(CLIENT_CMD_DIR)
 
-# Build both server and client
+# Build all binaries
 .PHONY: build
-build: build-server build-client
+build: build-server build-client build-certs
 
 # Build binaries for multiple platforms
 .PHONY: build-cross
@@ -94,6 +116,12 @@ build-cross: $(OUTPUT_DIR)
 	GOOS=darwin  GOARCH=arm64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CLIENT_BINARY)-darwin-arm64 ./$(CLIENT_CMD_DIR)
 	GOOS=windows GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CLIENT_BINARY)-windows-amd64.exe ./$(CLIENT_CMD_DIR)
 	
+	# Certificate generator binaries
+	GOOS=linux   GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-linux-amd64 ./$(CERTS_CMD_DIR)
+	GOOS=darwin  GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-darwin-amd64 ./$(CERTS_CMD_DIR)
+	GOOS=darwin  GOARCH=arm64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-darwin-arm64 ./$(CERTS_CMD_DIR)
+	GOOS=windows GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-windows-amd64.exe ./$(CERTS_CMD_DIR)
+	
 	@echo "Cross-platform binaries are available in $(OUTPUT_DIR):"
 	@ls -1 $(OUTPUT_DIR)
 
@@ -103,19 +131,11 @@ clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(OUTPUT_DIR)
 
-# Run tests with coverage report
-.PHONY: test-coverage
-test-coverage:
-	@echo "Running tests with coverage report..."
-	go test -v -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-	@echo "Coverage report generated: coverage.html"
-
-# Run benchmarks
-.PHONY: benchmark
-benchmark:
-	@echo "Running benchmarks..."
-	go test -v -bench=. -benchmem ./...
+# Clean certificates
+.PHONY: clean-certs
+clean-certs:
+	@echo "Cleaning certificates..."
+	rm -rf $(CERTS_DIR)
 
 # Check formatting of Go code
 .PHONY: fmt
@@ -144,14 +164,15 @@ install-staticcheck:
 # Run linter
 .PHONY: lint
 lint:
+	@command -v $(GOLANGCI_LINT) >/dev/null 2>&1 || { echo "golangci-lint is not installed. Run make install-lint"; exit 1; }
 	@echo "Running linter..."
-	@~/go/bin/golangci-lint run
+	@$(GOLANGCI_LINT) run
 
 # Run staticcheck tool
 .PHONY: staticcheck
 staticcheck:
 	@echo "Running staticcheck..."
-	@~/go/bin/staticcheck ./...
+	@$(STATICCHECK) ./...
 	@echo "Staticcheck passed!"
 
 # Run all checks (linter and staticcheck)
@@ -162,55 +183,72 @@ check-all: lint staticcheck
 # Run linter with auto-fix
 .PHONY: lint-fix
 lint-fix:
+	@command -v $(GOLANGCI_LINT) >/dev/null 2>&1 || { echo "golangci-lint is not installed. Run make install-lint"; exit 1; }
 	@echo "Running linter with auto-fix..."
-	@golangci-lint run --fix
+	@$(GOLANGCI_LINT) run --fix
+
+# Run tests with coverage report
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage report..."
+	go test -v ./... -coverprofile=coverage.out && go tool cover -html=coverage.out
+
+# Run benchmarks
+.PHONY: benchmark
+benchmark:
+	@echo "Running benchmarks..."
+	go test -bench=. -benchmem ./... 
 
 # Display help information
 .PHONY: help
 help:
-	@echo "GoVPN - Эволюция OpenVPN на Go"
+	@echo "GoVPN - OpenVPN Evolution in Go"
 	@echo ""
-	@echo "Доступные команды:"
-	@echo "  Сборка и запуск:"
-	@echo "  ================"
-	@echo "  default         - Запуск форматирования, проверок, линтера, сборки и тестов"
-	@echo "  run-server      - Запуск сервера локально"
-	@echo "  run-client      - Запуск клиента локально"
-	@echo "  build           - Сборка сервера и клиента для текущей ОС/архитектуры"
-	@echo "  build-server    - Сборка только сервера"
-	@echo "  build-client    - Сборка только клиента"
-	@echo "  build-cross     - Сборка бинарных файлов для разных платформ"
-	@echo ""
-	@echo "  Тестирование:"
-	@echo "  ============="
-	@echo "  test            - Запуск всех тестов со стандартным покрытием"
-	@echo "  test-with-race  - Запуск всех тестов с обнаружением гонок и покрытием"
-	@echo "  test-coverage   - Запуск тестов с отчетом о покрытии"
-	@echo "  benchmark       - Запуск бенчмарков"
-	@echo ""
-	@echo "  Качество кода:"
+	@echo "Available commands:"
+	@echo "  Build and run:"
 	@echo "  =============="
-	@echo "  fmt             - Проверка и форматирование кода"
-	@echo "  vet             - Анализ кода с помощью go vet"
-	@echo "  lint            - Запуск golangci-lint для проверки кода"
-	@echo "  lint-fix        - Запуск golangci-lint с автоисправлением"
-	@echo "  staticcheck     - Запуск staticcheck для статического анализа кода"
-	@echo "  check-all       - Запуск всех проверок качества кода"
+	@echo "  default         - Run formatting, checks, linter, build and tests"
+	@echo "  run-server      - Run server locally"
+	@echo "  run-client      - Run client locally"
+	@echo "  generate-certs  - Generate certificates for development/testing"
+	@echo "  build           - Build server, client and cert generator for current OS/arch"
+	@echo "  build-server    - Build server only"
+	@echo "  build-client    - Build client only"
+	@echo "  build-certs     - Build certificate generator only"
+	@echo "  build-cross     - Build binaries for multiple platforms"
 	@echo ""
-	@echo "  Зависимости:"
+	@echo "  Testing:"
+	@echo "  ========="
+	@echo "  test            - Run all tests with standard coverage"
+	@echo "  test-with-race  - Run all tests with race detection and coverage"
+	@echo "  test-coverage   - Run tests with coverage report"
+	@echo "  benchmark       - Run benchmarks"
+	@echo ""
+	@echo "  Code quality:"
+	@echo "  ============="
+	@echo "  fmt             - Check and format code"
+	@echo "  vet             - Analyze code with go vet"
+	@echo "  lint            - Run golangci-lint to check code"
+	@echo "  lint-fix        - Run golangci-lint with auto-fix"
+	@echo "  staticcheck     - Run staticcheck for static analysis"
+	@echo "  check-all       - Run all code quality checks"
+	@echo ""
+	@echo "  Dependencies:"
 	@echo "  ============"
-	@echo "  install-deps    - Установка зависимостей проекта"
-	@echo "  upgrade-deps    - Обновление всех зависимостей проекта"
-	@echo "  clean-deps      - Очистка зависимостей vendor"
-	@echo "  install-lint    - Установка golangci-lint"
-	@echo "  install-staticcheck - Установка staticcheck"
+	@echo "  install-deps    - Install project dependencies"
+	@echo "  upgrade-deps    - Upgrade all project dependencies"
+	@echo "  clean-deps      - Clean up vendor dependencies"
+	@echo "  install-lint    - Install golangci-lint"
+	@echo "  install-staticcheck - Install staticcheck"
 	@echo ""
-	@echo "  Очистка:"
-	@echo "  ========"
-	@echo "  clean           - Очистка артефактов сборки"
+	@echo "  Cleaning:"
+	@echo "  ========="
+	@echo "  clean           - Clean build artifacts"
+	@echo "  clean-certs     - Clean generated certificates"
 	@echo ""
-	@echo "Примеры:"
-	@echo "  make build               - Сборка бинарных файлов"
-	@echo "  make run-server          - Запуск сервера"
-	@echo "  make test                - Запуск всех тестов"
-	@echo "  make build-cross         - Сборка для разных платформ" 
+	@echo "Examples:"
+	@echo "  make build               - Build binaries"
+	@echo "  make generate-certs      - Generate certificates"
+	@echo "  make run-server          - Run server"
+	@echo "  make test                - Run all tests"
+	@echo "  make build-cross         - Build for multiple platforms"
