@@ -28,7 +28,6 @@ var (
 	certFile      = flag.String("cert", "", "Path to server certificate file")
 	keyFile       = flag.String("key", "", "Path to server key file")
 	caFile        = flag.String("ca", "", "Path to CA file")
-	verbosity     = flag.Int("verb", 4, "Log verbosity level (1-9)")
 	cipher        = flag.String("cipher", "AES-256-GCM", "Encryption cipher")
 	auth          = flag.String("auth", "SHA256", "Authentication algorithm")
 	keepalive     = flag.Int("keepalive", 10, "Keepalive interval in seconds")
@@ -252,19 +251,6 @@ func getIntValue(config map[string]interface{}, key string, defaultValue int) in
 			if intValue, err := strconv.Atoi(strValue); err == nil {
 				return intValue
 			}
-		}
-	}
-	return defaultValue
-}
-
-// getBoolValue extracts a boolean value from the configuration map
-func getBoolValue(config map[string]interface{}, key string, defaultValue bool) bool {
-	if value, ok := config[key]; ok {
-		if boolValue, ok := value.(bool); ok {
-			return boolValue
-		}
-		if strValue, ok := value.(string); ok {
-			return strValue == "true" || strValue == "yes" || strValue == "1"
 		}
 	}
 	return defaultValue

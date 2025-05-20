@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,12 +14,13 @@ import (
 
 // Server represents the REST API server
 type Server struct {
-	config     Config
-	httpServer *http.Server
-	vpnServer  *core.OpenVPNServer
-	router     *http.ServeMux
-	wg         sync.WaitGroup
-	running    bool
+	config      Config
+	httpServer  *http.Server
+	vpnServer   *core.OpenVPNServer
+	router      *http.ServeMux
+	wg          sync.WaitGroup
+	running     bool
+	rateLimiter *rateLimiter
 }
 
 // Config represents the API server configuration
@@ -50,9 +50,10 @@ func DefaultConfig() Config {
 // NewServer creates a new API server
 func NewServer(config Config, vpnServer *core.OpenVPNServer) *Server {
 	server := &Server{
-		config:    config,
-		vpnServer: vpnServer,
-		router:    http.NewServeMux(),
+		config:      config,
+		vpnServer:   vpnServer,
+		router:      http.NewServeMux(),
+		rateLimiter: newRateLimiter(100, 1*time.Minute), // Rate limit: 100 requests per minute
 	}
 
 	// Register routes
@@ -128,17 +129,4 @@ func (s *Server) registerRoutes() {
 	// User management endpoints
 	s.router.HandleFunc(base+"/users", s.handleGetUsers)
 	s.router.HandleFunc(base+"/users/", s.handleUserOperations)
-}
-
-// writeJSON is a helper function to write JSON responses
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if data != nil {
-		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Printf("Error encoding JSON: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	}
 }

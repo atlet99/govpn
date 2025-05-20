@@ -75,7 +75,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 		s.api = api.NewServer(apiConfig, s.vpn)
 		if err := s.api.Start(); err != nil {
-			s.vpn.Stop()
+			if stopErr := s.vpn.Stop(); stopErr != nil {
+				log.Printf("Error stopping VPN server after API server start failed: %v", stopErr)
+			}
 			return fmt.Errorf("failed to start API server: %w", err)
 		}
 
