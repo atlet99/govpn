@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"hash"
 	"log"
+
+	"golang.org/x/crypto/chacha20poly1305"
 )
 
 var (
@@ -128,7 +130,7 @@ func NewCipherContext(mode CipherMode, digest AuthDigest, key []byte) (*CipherCo
 	case CipherAES256CBC:
 		keySize = 32 // 256 bits
 	case CipherChacha20Poly1305:
-		keySize = 32 // 256 bits
+		keySize = 32 // 256 bits (ChaCha20-Poly1305 requires a 32-byte key)
 		ctx.IsGCM = true
 	default:
 		return nil, ErrInvalidCipherMode
@@ -160,9 +162,11 @@ func NewCipherContext(mode CipherMode, digest AuthDigest, key []byte) (*CipherCo
 			}
 		}
 	case mode == CipherChacha20Poly1305:
-		// ChaCha20-Poly1305 is an AEAD cipher
-		// TODO: Implement support for ChaCha20-Poly1305 (alternative to AES-GCM, recommended by OWASP)
-		return nil, errors.New("ChaCha20-Poly1305 not implemented yet")
+		// Create ChaCha20-Poly1305 AEAD cipher
+		ctx.GCM, err = chacha20poly1305.New(ctx.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ChaCha20-Poly1305 cipher: %w", err)
+		}
 	}
 
 	// Initialize HMAC for non-GCM modes

@@ -68,6 +68,15 @@ type OpenVPNSession struct {
 	LastPacketTime  time.Time
 	IsHandshaking   bool
 	HandshakeState  *tls.ConnectionState
+	PushOptions     *PushOptions
+}
+
+// PushOptions represents the options to push to clients
+type PushOptions struct {
+	Routes          []string
+	DNSServers      []string
+	RedirectGateway bool
+	OtherOptions    map[string]string
 }
 
 // NewOpenVPNSession creates a new OpenVPN session
@@ -219,6 +228,11 @@ func (s *OpenVPNSession) ProcessClientHandshake(packet *OpenVPNPacket) (*OpenVPN
 	return responsePacket, nil
 }
 
+// UpdatePushOptions обновляет опции push для сессии
+func (s *OpenVPNSession) UpdatePushOptions(options PushOptions) {
+	s.PushOptions = &options
+}
+
 // ProcessControlPacket processes a control packet
 func (s *OpenVPNSession) ProcessControlPacket(packet *OpenVPNPacket) (*OpenVPNPacket, error) {
 	// Verify HMAC if TLS authentication is enabled
@@ -236,11 +250,38 @@ func (s *OpenVPNSession) ProcessControlPacket(packet *OpenVPNPacket) (*OpenVPNPa
 		return s.ProcessClientHandshake(packet)
 
 	case OpvnP_CONTROL_V1:
-		// Handle control message
-		// TODO: Process control message (e.g., push routes, DNS, etc.)
+		// Handle control message - Process control message and prepare response
+		controlResponse := []byte{}
 
-		// Send an ACK
-		ackPacket := NewPacket(OpvnP_ACK_V1, nil)
+		// If we have push options configured, send them to the client
+		if s.PushOptions != nil {
+			// Add push routes
+			for _, route := range s.PushOptions.Routes {
+				pushOption := fmt.Sprintf("push \"route %s\"\n", route)
+				controlResponse = append(controlResponse, []byte(pushOption)...)
+			}
+
+			// Add push DNS servers
+			for _, dns := range s.PushOptions.DNSServers {
+				pushOption := fmt.Sprintf("push \"dhcp-option DNS %s\"\n", dns)
+				controlResponse = append(controlResponse, []byte(pushOption)...)
+			}
+
+			// Add redirect-gateway if enabled
+			if s.PushOptions.RedirectGateway {
+				pushOption := "push \"redirect-gateway def1 bypass-dhcp\"\n"
+				controlResponse = append(controlResponse, []byte(pushOption)...)
+			}
+
+			// Add other custom options
+			for key, value := range s.PushOptions.OtherOptions {
+				pushOption := fmt.Sprintf("push \"%s %s\"\n", key, value)
+				controlResponse = append(controlResponse, []byte(pushOption)...)
+			}
+		}
+
+		// Send an ACK with push options if any
+		ackPacket := NewPacket(OpvnP_ACK_V1, controlResponse)
 		ackPacket.SessionID = s.SessionID
 		ackPacket.PacketID = s.PacketID
 		s.PacketID++
@@ -293,4 +334,29 @@ func (s *OpenVPNSession) CreateDataPacket(data []byte) (*OpenVPNPacket, error) {
 	}
 
 	return packet, nil
+}
+
+// DecryptDataPacket decrypts a DATA packet and returns the payload
+func (s *OpenVPNSession) DecryptDataPacket(packet *OpenVPNPacket) ([]byte, error) {
+	if packet.Opcode != OpvnP_DATA_V1 {
+		return nil, fmt.Errorf("not a DATA packet (opcode %d)", packet.Opcode)
+	}
+
+	// Verify HMAC if TLS authentication is enabled
+	if s.TLSAuthKey != nil && !packet.VerifyHMAC(s.TLSAuthKey) {
+		return nil, ErrHMACVerificationFailed
+	}
+
+	// If still in handshaking state or no cipher context, return error
+	if s.IsHandshaking || s.CipherContext == nil {
+		return nil, errors.New("encryption not established, cannot decrypt data")
+	}
+
+	// Decrypt the payload
+	decryptedData, err := s.CipherContext.Decrypt(packet.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt data: %w", err)
+	}
+
+	return decryptedData, nil
 }

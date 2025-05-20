@@ -9,8 +9,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"crypto/tls"
-
 	"github.com/atlet99/govpn/pkg/auth"
 )
 
@@ -401,11 +399,15 @@ func (s *OpenVPNServer) configureDevice() error {
 	return nil
 }
 
-// handleTCPClient handles TCP client connection
+// handleTCPClient handles a TCP client connection
 func (s *OpenVPNServer) handleTCPClient(conn net.Conn) {
-	log.Printf("New TCP connection from %s", conn.RemoteAddr())
+	defer s.wg.Done()
 
-	sessionKey := conn.RemoteAddr().String()
+	remoteAddr := conn.RemoteAddr().String()
+	log.Printf("New TCP client connected: %s", remoteAddr)
+
+	sessionKey := remoteAddr
+	buffer := make([]byte, 4096)
 
 	tlsConfig, err := s.certManager.GetTLSConfig()
 	if err != nil {
@@ -417,23 +419,15 @@ func (s *OpenVPNServer) handleTCPClient(conn net.Conn) {
 	session := auth.NewOpenVPNSession(tlsConfig, s.certManager.GetTLSAuthKey())
 	s.sessions.Store(sessionKey, session)
 
-	tlsConn := tls.Server(conn, tlsConfig)
-	if err := tlsConn.Handshake(); err != nil {
-		log.Printf("TLS handshake failed: %v", err)
-		conn.Close()
-		s.sessions.Delete(sessionKey)
-		return
+	// Apply server push options
+	pushOptions := auth.PushOptions{
+		Routes:          s.config.Routes,
+		DNSServers:      s.config.DNSServers,
+		RedirectGateway: true,
+		OtherOptions:    make(map[string]string),
 	}
+	session.UpdatePushOptions(pushOptions)
 
-	state := tlsConn.ConnectionState()
-	if len(state.PeerCertificates) > 0 {
-		log.Printf("Client authenticated: %s", state.PeerCertificates[0].Subject.CommonName)
-	}
-
-	session.IsHandshaking = false
-	session.HandshakeState = &state
-
-	buffer := make([]byte, 2048)
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -483,8 +477,21 @@ func (s *OpenVPNServer) handleTCPClient(conn net.Conn) {
 			}
 
 			if opvnPacket.Opcode == auth.OpvnP_DATA_V1 {
-				// TODO: Process data packet (decrypt and write to TUN/TAP)
-				log.Printf("Received data packet from client %s", conn.RemoteAddr())
+				// Process data packet using the DecryptDataPacket method
+				decryptedData, err := session.DecryptDataPacket(opvnPacket)
+				if err != nil {
+					log.Printf("Error processing data packet: %v", err)
+					continue
+				}
+
+				// Process the IP packet
+				packet := NewPacket(decryptedData)
+				if packet != nil && packet.IsIPv4() {
+					// Write the decrypted packet to the TUN device
+					if _, err := s.device.Write(decryptedData); err != nil {
+						log.Printf("Error writing to TUN device: %v", err)
+					}
+				}
 			}
 		}
 	}
@@ -514,6 +521,16 @@ func (s *OpenVPNServer) handleUDPPacket(packet []byte, addr *net.UDPAddr) {
 		}
 
 		session = auth.NewOpenVPNSession(tlsConfig, s.certManager.GetTLSAuthKey())
+
+		// Apply server push options
+		pushOptions := auth.PushOptions{
+			Routes:          s.config.Routes,
+			DNSServers:      s.config.DNSServers,
+			RedirectGateway: true,
+			OtherOptions:    make(map[string]string),
+		}
+		session.UpdatePushOptions(pushOptions)
+
 		s.sessions.Store(sessionKey, session)
 	}
 
@@ -537,7 +554,20 @@ func (s *OpenVPNServer) handleUDPPacket(packet []byte, addr *net.UDPAddr) {
 	}
 
 	if opvnPacket.Opcode == auth.OpvnP_DATA_V1 {
-		// TODO: Process data packet (decrypt and write to TUN/TAP)
-		log.Printf("Received data packet from client %s", addr.String())
+		// Process data packet using the DecryptDataPacket method
+		decryptedData, err := session.DecryptDataPacket(opvnPacket)
+		if err != nil {
+			log.Printf("Error processing data packet: %v", err)
+			return
+		}
+
+		// Process the IP packet
+		packet := NewPacket(decryptedData)
+		if packet != nil && packet.IsIPv4() {
+			// Write the decrypted packet to the TUN device
+			if _, err := s.device.Write(decryptedData); err != nil {
+				log.Printf("Error writing to TUN device: %v", err)
+			}
+		}
 	}
 }
