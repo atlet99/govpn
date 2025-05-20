@@ -20,12 +20,12 @@ type VPNServer interface {
 
 // ServerStatus represents the server status
 type ServerStatus struct {
-	Running      bool     // Whether the server is running
-	ClientCount  int      // Number of connected clients
-	BytesIn      uint64   // Bytes received
-	BytesOut     uint64   // Bytes sent
-	ActiveRoutes []string // Active routes
-	StartTime    int64    // Server start time (Unix timestamp)
+	Running      bool     `json:"running"`      // Whether the server is running
+	ClientCount  int      `json:"clientCount"`  // Number of connected clients
+	BytesIn      uint64   `json:"bytesIn"`      // Bytes received
+	BytesOut     uint64   `json:"bytesOut"`     // Bytes sent
+	ActiveRoutes []string `json:"activeRoutes"` // Active routes
+	StartTime    int64    `json:"startTime"`    // Server start time (Unix timestamp)
 }
 
 // Connection represents a client connection to the VPN server

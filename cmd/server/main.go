@@ -7,31 +7,37 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/atlet99/govpn/pkg/compat"
 	"github.com/atlet99/govpn/pkg/core"
+	"github.com/atlet99/govpn/pkg/server"
 )
 
 var (
-	configFile  = flag.String("config", "", "Path to OpenVPN configuration file")
-	port        = flag.Int("port", 1194, "Port to listen on")
-	proto       = flag.String("proto", "udp", "Protocol (udp or tcp)")
-	listenAddr  = flag.String("listen", "0.0.0.0", "Address to listen on")
-	device      = flag.String("dev", "tun", "Device type (tun or tap)")
-	serverAddr  = flag.String("server", "10.8.0.0", "VPN server subnet")
-	serverMask  = flag.String("mask", "255.255.255.0", "VPN server subnet mask")
-	certFile    = flag.String("cert", "", "Path to server certificate file")
-	keyFile     = flag.String("key", "", "Path to server key file")
-	caFile      = flag.String("ca", "", "Path to CA file")
-	verbosity   = flag.Int("verb", 4, "Log verbosity level (1-9)")
-	cipher      = flag.String("cipher", "AES-256-GCM", "Encryption cipher")
-	auth        = flag.String("auth", "SHA256", "Authentication algorithm")
-	keepalive   = flag.Int("keepalive", 10, "Keepalive interval in seconds")
-	keepTimeout = flag.Int("keepalive-timeout", 120, "Keepalive timeout in seconds")
+	configFile    = flag.String("config", "", "Path to OpenVPN configuration file")
+	port          = flag.Int("port", 1194, "Port to listen on")
+	proto         = flag.String("proto", "udp", "Protocol (udp or tcp)")
+	listenAddr    = flag.String("listen", "0.0.0.0", "Address to listen on")
+	device        = flag.String("dev", "tun", "Device type (tun or tap)")
+	serverAddr    = flag.String("server", "10.8.0.0", "VPN server subnet")
+	serverMask    = flag.String("mask", "255.255.255.0", "VPN server subnet mask")
+	certFile      = flag.String("cert", "", "Path to server certificate file")
+	keyFile       = flag.String("key", "", "Path to server key file")
+	caFile        = flag.String("ca", "", "Path to CA file")
+	verbosity     = flag.Int("verb", 4, "Log verbosity level (1-9)")
+	cipher        = flag.String("cipher", "AES-256-GCM", "Encryption cipher")
+	auth          = flag.String("auth", "SHA256", "Authentication algorithm")
+	keepalive     = flag.Int("keepalive", 10, "Keepalive interval in seconds")
+	keepTimeout   = flag.Int("keepalive-timeout", 120, "Keepalive timeout in seconds")
+	enableAPI     = flag.Bool("api", false, "Enable REST API")
+	apiPort       = flag.Int("api-port", 8080, "REST API port")
+	apiListenAddr = flag.String("api-listen", "127.0.0.1", "REST API listen address")
+	apiAuth       = flag.Bool("api-auth", false, "Enable API authentication")
+	apiAuthSecret = flag.String("api-auth-secret", "", "API authentication secret key")
 )
 
 func main() {
@@ -42,7 +48,7 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
 	// Check for configuration file
-	var config core.Config
+	var vpnConfig core.Config
 	if *configFile != "" {
 		// Parse configuration file
 		parser := compat.NewConfigParser()
@@ -52,33 +58,46 @@ func main() {
 		}
 
 		// Convert OpenVPN configuration to GoVPN configuration
-		config = convertConfig(openvpnConfig)
+		vpnConfig = convertConfig(openvpnConfig)
 	} else {
 		// Use command line parameters
-		config = core.Config{
-			DeviceType:       *device,
-			ListenAddress:    *listenAddr,
-			Protocol:         *proto,
-			Port:             *port,
-			ServerNetwork:    fmt.Sprintf("%s %s", *serverAddr, *serverMask),
-			LogLevel:         getLogLevel(*verbosity),
-			CertPath:         *certFile,
-			KeyPath:          *keyFile,
-			CAPath:           *caFile,
-			Cipher:           *cipher,
-			Auth:             *auth,
-			KeepAlive:        time.Duration(*keepalive) * time.Second,
-			KeepAliveTimeout: *keepTimeout,
+		vpnConfig = core.Config{
+			DeviceType:        *device,
+			ListenAddress:     *listenAddr,
+			Protocol:          *proto,
+			Port:              *port,
+			ServerNetwork:     fmt.Sprintf("%s %s", *serverAddr, *serverMask),
+			DeviceName:        getDefaultDeviceName(),
+			CertPath:          *certFile,
+			KeyPath:           *keyFile,
+			CAPath:            *caFile,
+			CipherMode:        *cipher,
+			AuthDigest:        *auth,
+			KeepaliveInterval: *keepalive,
+			KeepaliveTimeout:  *keepTimeout,
+
+			// API settings
+			EnableAPI:        *enableAPI,
+			APIPort:          *apiPort,
+			APIListenAddress: *apiListenAddr,
+			APIAuth:          *apiAuth,
+			APIAuthSecret:    *apiAuthSecret,
 		}
 	}
 
 	// Validate configuration
-	if err := validateServerConfig(config); err != nil {
+	if err := validateServerConfig(vpnConfig); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
 	}
 
+	// Create server configuration
+	serverConfig := &server.Config{
+		VPNConfig: vpnConfig,
+		EnableAPI: *enableAPI,
+	}
+
 	// Create server
-	server, err := core.NewServer(config)
+	mainServer, err := server.NewServer(serverConfig)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
@@ -90,16 +109,33 @@ func main() {
 	setupSignalHandling(cancel)
 
 	// Start server
-	if err := server.Start(ctx); err != nil {
+	if err := mainServer.Start(ctx); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+
+	log.Printf("GoVPN server started on %s:%d", vpnConfig.ListenAddress, vpnConfig.Port)
+	if *enableAPI {
+		log.Printf("REST API available at http://%s:%d/api/v1", *apiListenAddr, *apiPort)
 	}
 
 	// Wait for context cancellation
 	<-ctx.Done()
 
 	// Stop server
-	if err := server.Stop(); err != nil {
+	if err := mainServer.Stop(); err != nil {
 		log.Printf("Error stopping server: %v", err)
+	}
+}
+
+// getDefaultDeviceName returns a default device name for the current OS
+func getDefaultDeviceName() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "govpn"
+	case "darwin":
+		return "utun8"
+	default:
+		return "tun0"
 	}
 }
 
@@ -118,22 +154,30 @@ func setupSignalHandling(cancel context.CancelFunc) {
 // convertConfig converts OpenVPN configuration to GoVPN configuration
 func convertConfig(openvpnConfig map[string]interface{}) core.Config {
 	config := core.Config{
-		DeviceType:       getStringValue(openvpnConfig, "dev", "tun"),
-		ListenAddress:    getStringValue(openvpnConfig, "local", "0.0.0.0"),
-		Protocol:         getStringValue(openvpnConfig, "protocol", "udp"),
-		Port:             getIntValue(openvpnConfig, "port", 1194),
-		ServerNetwork:    getStringValue(openvpnConfig, "server_network", "10.8.0.0 255.255.255.0"),
-		DNSServers:       getStringSlice(openvpnConfig, "dns"),
-		LogLevel:         getStringValue(openvpnConfig, "log_level", "info"),
-		CertPath:         getStringValue(openvpnConfig, "cert", ""),
-		KeyPath:          getStringValue(openvpnConfig, "key", ""),
-		CAPath:           getStringValue(openvpnConfig, "ca", ""),
-		CRLPath:          getStringValue(openvpnConfig, "crl-verify", ""),
-		CompLZO:          getBoolValue(openvpnConfig, "comp-lzo", false),
-		Cipher:           getStringValue(openvpnConfig, "cipher", "AES-256-GCM"),
-		Auth:             getStringValue(openvpnConfig, "auth", "SHA256"),
-		KeepAlive:        time.Duration(getIntValue(openvpnConfig, "keepalive", 10)) * time.Second,
-		KeepAliveTimeout: getIntValue(openvpnConfig, "keepalive-timeout", 120),
+		DeviceType:        getStringValue(openvpnConfig, "dev", "tun"),
+		DeviceName:        getDefaultDeviceName(),
+		ListenAddress:     getStringValue(openvpnConfig, "local", "0.0.0.0"),
+		Protocol:          getStringValue(openvpnConfig, "protocol", "udp"),
+		Port:              getIntValue(openvpnConfig, "port", 1194),
+		ServerNetwork:     getStringValue(openvpnConfig, "server_network", "10.8.0.0 255.255.255.0"),
+		DNSServers:        getStringSlice(openvpnConfig, "dns"),
+		CertPath:          getStringValue(openvpnConfig, "cert", ""),
+		KeyPath:           getStringValue(openvpnConfig, "key", ""),
+		CAPath:            getStringValue(openvpnConfig, "ca", ""),
+		CRLPath:           getStringValue(openvpnConfig, "crl-verify", ""),
+		CipherMode:        getStringValue(openvpnConfig, "cipher", "AES-256-GCM"),
+		AuthDigest:        getStringValue(openvpnConfig, "auth", "SHA256"),
+		TLSVersion:        "1.3",
+		AuthMode:          "certificate",
+		KeepaliveInterval: getIntValue(openvpnConfig, "keepalive", 10),
+		KeepaliveTimeout:  getIntValue(openvpnConfig, "keepalive-timeout", 120),
+
+		// API settings
+		EnableAPI:        *enableAPI,
+		APIPort:          *apiPort,
+		APIListenAddress: *apiListenAddr,
+		APIAuth:          *apiAuth,
+		APIAuthSecret:    *apiAuthSecret,
 	}
 
 	// Convert push routes
@@ -169,6 +213,11 @@ func validateServerConfig(config core.Config) error {
 
 	if config.CRLPath != "" && !fileExists(config.CRLPath) {
 		return fmt.Errorf("CRL file not found: %s", config.CRLPath)
+	}
+
+	// Check API auth secret
+	if config.APIAuth && config.APIAuthSecret == "" {
+		return fmt.Errorf("API authentication enabled but no secret provided")
 	}
 
 	return nil
@@ -232,18 +281,4 @@ func getStringSlice(config map[string]interface{}, key string) []string {
 		}
 	}
 	return nil
-}
-
-// getLogLevel returns a logging level based on OpenVPN verbosity level
-func getLogLevel(verbosity int) string {
-	switch {
-	case verbosity <= 2:
-		return "error"
-	case verbosity == 3:
-		return "warning"
-	case verbosity == 4:
-		return "info"
-	default:
-		return "debug"
-	}
 }

@@ -16,7 +16,17 @@ GoVPN aims to evolve OpenVPN, preserving its time-tested concepts while addressi
 
 ## Current Status
 
-The project is in early development (Phase 1). Stay tuned for updates!
+The project is in active development (Phase 1). Key implemented features:
+
+- Core VPN engine with OpenVPN protocol compatibility
+- Support for classic OpenVPN configuration formats
+- Modern cryptography with AES-GCM and ChaCha20-Poly1305
+- TLSv1.3 support with secure ciphers
+- Certificate management and PKI
+- REST API for server management
+- Robust command-line interface
+
+Stay tuned for upcoming features!
 
 ## Roadmap
 
@@ -41,6 +51,56 @@ See [IDEA.md](./IDEA.md) for a detailed roadmap and development plan.
 ## Installation
 
 *Coming soon*
+
+## REST API
+
+GoVPN provides a comprehensive REST API for managing the server. To enable it, use the `-api` flag when starting the server:
+
+```bash
+./govpn-server -api -api-port 8080 -api-listen 127.0.0.1
+```
+
+### API Endpoints
+
+The API is available at `http://<api-listen>:<api-port>/api/v1/` and includes the following endpoints:
+
+- **GET /status** - Get server status information
+- **GET /clients** - List all connected clients
+- **GET /clients/:id** - Get details for a specific client
+- **DELETE /clients/:id** - Disconnect a client
+- **GET /certificates** - List all certificates
+- **GET /certificates/:id** - Get certificate details
+- **POST /certificates** - Create a new certificate
+- **POST /certificates/revoke/:id** - Revoke a certificate
+- **DELETE /certificates/:id** - Delete a certificate
+- **GET /config** - Get server configuration
+- **POST /config/update** - Update server configuration
+- **GET /users** - List all users
+- **GET /users/:id** - Get user details
+- **PUT /users/:id** - Create a new user
+- **POST /users/:id** - Update a user
+- **DELETE /users/:id** - Delete a user
+
+### Authentication
+
+API authentication can be enabled with the `-api-auth` flag, requiring a JWT token for requests:
+
+```bash
+./govpn-server -api -api-auth -api-auth-secret "your-secret-key"
+```
+
+### Example Usage
+
+```bash
+# Get server status
+curl http://127.0.0.1:8080/api/v1/status
+
+# List all connected clients
+curl http://127.0.0.1:8080/api/v1/clients
+
+# Disconnect a specific client
+curl -X DELETE http://127.0.0.1:8080/api/v1/clients/client1
+```
 
 ## Development
 

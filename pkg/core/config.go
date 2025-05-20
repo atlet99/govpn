@@ -13,76 +13,107 @@ var (
 	ErrInvalidConfig = errors.New("invalid configuration")
 )
 
-// Config represents server configuration
+// Config represents VPN server configuration
 type Config struct {
 	// Network settings
-	ListenAddress string
-	Port          int
-	Protocol      string // "tcp", "udp", or "both"
-	EnableTCP     bool
-	EnableUDP     bool
-	ServerNetwork string
+	ListenAddress string // Address to listen on
+	Port          int    // Port to listen on
+	Protocol      string // Protocol (tcp or udp)
+	EnableTCP     bool   // Enable TCP server
+	EnableUDP     bool   // Enable UDP server
 
-	// TUN/TAP device settings
-	DeviceName string
-	DeviceType string // "tun" or "tap"
-	MTU        int
+	// Server network settings
+	ServerNetwork string   // Server network CIDR (e.g., "10.8.0.0/24")
+	Routes        []string // Routes to push to clients (CIDR notation)
+	DNSServers    []string // DNS servers to push to clients
 
-	// Security settings
-	TLSEnabled     bool
-	CAPath         string
-	CertPath       string
-	KeyPath        string
-	CRLPath        string
-	TLSAuthKeyPath string
-	DHParamsPath   string
-	Cipher         string
-	Auth           string
+	// Device settings
+	DeviceName  string // TUN/TAP device name
+	DeviceType  string // Device type (tun or tap)
+	MTU         int    // MTU size
+	InternalDNS bool   // Whether to use internal DNS resolver
+
+	// Security
+	CipherMode string // Cipher mode
+	AuthDigest string // Authentication digest
+	TLSVersion string // TLS version (default: 1.3)
+	AuthMode   string // Authentication mode
+
+	// Certificate settings
+	CAPath         string // CA certificate path
+	CertPath       string // Server certificate path
+	KeyPath        string // Server key path
+	CRLPath        string // CRL path
+	DHParamsPath   string // Diffie-Hellman parameters path
+	TLSAuthKeyPath string // TLS authentication key path
 
 	// Connection settings
-	MaxClients       int
-	KeepAlive        time.Duration
-	HandshakeTimeout time.Duration
+	KeepaliveInterval int // Keepalive interval in seconds
+	KeepaliveTimeout  int // Keepalive timeout in seconds
 
-	// Routing settings
-	Routes     []string // Routes for VPN clients
-	DNSServers []string // DNS servers to push to clients
+	// API settings
+	EnableAPI        bool   // Enable REST API
+	APIListenAddress string // API listen address
+	APIPort          int    // API port
+	APIAuth          bool   // Enable API authentication
+	APIAuthSecret    string // API authentication secret
 
-	// Advanced settings
-	CompLZO          bool   // Use LZO compression
-	KeepAliveTimeout int    // Keepalive timeout in seconds
-	LogLevel         string // Logging level
+	// Timing settings (mostly for testing)
+	HandshakeTimeout time.Duration // Handshake timeout
+	ReadTimeout      time.Duration // Read timeout
+	WriteTimeout     time.Duration // Write timeout
 }
 
-// DefaultConfig returns a default configuration
+// DefaultConfig returns default configuration
 func DefaultConfig() Config {
 	return Config{
-		ListenAddress:    "0.0.0.0",
-		Port:             1194,
-		Protocol:         "both",
-		EnableTCP:        true,
-		EnableUDP:        true,
-		ServerNetwork:    "10.8.0.0/24",
-		DeviceName:       "govpn0",
-		DeviceType:       "tun",
-		MTU:              1500,
-		TLSEnabled:       true,
-		CAPath:           "certs/ca.crt",
-		CertPath:         "certs/server.crt",
-		KeyPath:          "certs/server.key",
-		CRLPath:          "certs/crl.pem",
-		TLSAuthKeyPath:   "certs/ta.key",
-		DHParamsPath:     "certs/dh2048.pem",
-		Cipher:           "AES-256-GCM",
-		Auth:             "SHA256",
-		MaxClients:       100,
-		KeepAlive:        time.Duration(10) * time.Second,
+		// Network settings
+		ListenAddress: "0.0.0.0",
+		Port:          1194,
+		Protocol:      "udp",
+		EnableTCP:     true,
+		EnableUDP:     true,
+		ServerNetwork: "10.8.0.0/24",
+
+		// Device settings
+		DeviceName:  "tun0",
+		DeviceType:  "tun",
+		MTU:         1500,
+		InternalDNS: false,
+
+		// Security
+		CipherMode: "AES-256-GCM",
+		AuthDigest: "SHA512",
+		TLSVersion: "1.3",
+		AuthMode:   "certificate",
+
+		// Certificate settings
+		CAPath:         "certs/ca.crt",
+		CertPath:       "certs/server.crt",
+		KeyPath:        "certs/server.key",
+		CRLPath:        "certs/crl.pem",
+		DHParamsPath:   "certs/dh4096.pem",
+		TLSAuthKeyPath: "certs/ta.key",
+
+		// Connection settings
+		KeepaliveInterval: 10,
+		KeepaliveTimeout:  60,
+
+		// API settings
+		EnableAPI:        false,
+		APIListenAddress: "127.0.0.1",
+		APIPort:          8080,
+		APIAuth:          true,
+		APIAuthSecret:    "",
+
+		// Timing settings
 		HandshakeTimeout: time.Duration(30) * time.Second,
-		Routes:           []string{},
-		DNSServers:       []string{},
-		CompLZO:          false,
-		KeepAliveTimeout: 60,
-		LogLevel:         "info",
+		ReadTimeout:      time.Duration(5) * time.Second,
+		WriteTimeout:     time.Duration(5) * time.Second,
+
+		// Push settings
+		Routes:     []string{},
+		DNSServers: []string{"8.8.8.8", "8.8.4.4"},
 	}
 }
 
@@ -104,17 +135,27 @@ func (c *Config) Validate() error {
 		return errors.New("invalid MTU value")
 	}
 
-	if c.TLSEnabled {
-		if c.CAPath == "" {
-			return errors.New("CA path required when TLS is enabled")
+	// We always use TLS in this implementation
+	if c.CAPath == "" {
+		return errors.New("CA path is required")
+	}
+
+	if c.CertPath == "" {
+		return errors.New("certificate path is required")
+	}
+
+	if c.KeyPath == "" {
+		return errors.New("key path is required")
+	}
+
+	// API validation
+	if c.EnableAPI {
+		if c.APIPort <= 0 || c.APIPort > 65535 {
+			return errors.New("invalid API port number")
 		}
 
-		if c.CertPath == "" {
-			return errors.New("certificate path required when TLS is enabled")
-		}
-
-		if c.KeyPath == "" {
-			return errors.New("key path required when TLS is enabled")
+		if c.APIAuth && c.APIAuthSecret == "" {
+			return errors.New("API authentication enabled but no auth secret provided")
 		}
 	}
 
