@@ -118,10 +118,21 @@ type Config struct {
 	ReadTimeout      time.Duration // Read timeout
 	WriteTimeout     time.Duration // Write timeout
 
+	// CLI settings
+	ProfileName string // Current profile name
+	ConfigPath  string // Path to current configuration file
+	RunAsDaemon bool   // Whether to run as a daemon
+	LogLevel    string // Log verbosity (error, warning, info, debug, trace)
+	LogOutput   string // Log output (stdout, file, syslog)
+	LogFilePath string // Log file path when LogOutput is "file"
+
+	// Service settings
+	ServiceName    string // Name for system service
+	ServiceEnabled bool   // Whether to enable service
+
 	// Legacy settings
-	CompLZO          bool   // Use LZO compression
-	KeepAliveTimeout int    // Keepalive timeout in seconds (legacy)
-	LogLevel         string // Logging level
+	CompLZO          bool // Use LZO compression
+	KeepAliveTimeout int  // Keepalive timeout in seconds (legacy)
 }
 
 // DefaultConfig returns a default configuration
@@ -184,6 +195,17 @@ func DefaultConfig() Config {
 		CompLZO:          false,
 		KeepAliveTimeout: DefaultKeepaliveTimeout,
 		LogLevel:         "info",
+
+		// CLI settings
+		ProfileName: "default",
+		ConfigPath:  "",
+		RunAsDaemon: false,
+		LogOutput:   "stdout",
+		LogFilePath: "",
+
+		// Service settings
+		ServiceName:    "govpn",
+		ServiceEnabled: false,
 	}
 }
 
@@ -227,6 +249,15 @@ func (c *Config) Validate() error {
 		if c.APIAuth && c.APIAuthSecret == "" {
 			return errors.New("API authentication enabled but no auth secret provided")
 		}
+	}
+
+	// Log validation
+	if c.LogOutput != "stdout" && c.LogOutput != "file" && c.LogOutput != "syslog" {
+		return errors.New("log output must be stdout, file, or syslog")
+	}
+
+	if c.LogOutput == "file" && c.LogFilePath == "" {
+		return errors.New("log file path is required when log output is file")
 	}
 
 	return nil

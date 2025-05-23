@@ -50,6 +50,7 @@ type Config struct {
 	// Connection settings
 	KeepaliveInterval int // Keepalive interval in seconds
 	KeepaliveTimeout  int // Keepalive timeout in seconds
+	MaxClients        int // Maximum number of clients
 
 	// API settings
 	EnableAPI        bool   // Enable REST API
@@ -74,6 +75,9 @@ type Config struct {
 	// Service settings
 	ServiceName    string // Name for system service
 	ServiceEnabled bool   // Whether to enable service
+
+	// Legacy settings
+	CompLZO bool // Use LZO compression
 }
 
 // DefaultConfig returns default configuration
@@ -110,6 +114,7 @@ func DefaultConfig() Config {
 		// Connection settings
 		KeepaliveInterval: 10,
 		KeepaliveTimeout:  60,
+		MaxClients:        100,
 
 		// API settings
 		EnableAPI:        false,
@@ -136,6 +141,9 @@ func DefaultConfig() Config {
 		// Service settings
 		ServiceName:    "govpn",
 		ServiceEnabled: false,
+
+		// Legacy settings
+		CompLZO: false,
 	}
 }
 
