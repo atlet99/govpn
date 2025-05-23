@@ -10,7 +10,7 @@ import (
 	"github.com/atlet99/govpn/pkg/auth"
 )
 
-// BenchmarkConfigValidation тестирует производительность валидации конфигурации
+// BenchmarkConfigValidation tests performance of config validation
 func BenchmarkConfigValidation(b *testing.B) {
 	config := DefaultConfig()
 
@@ -23,16 +23,16 @@ func BenchmarkConfigValidation(b *testing.B) {
 	}
 }
 
-// BenchmarkConfigCreation тестирует производительность создания конфигурации
+// BenchmarkConfigCreation tests performance of config creation
 func BenchmarkConfigCreation(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		config := DefaultConfig()
-		_ = config // Избегаем оптимизации компилятора
+		_ = config // Avoid compiler optimization
 	}
 }
 
-// BenchmarkCipherContextCreation тестирует производительность создания контекста шифрования
+// BenchmarkCipherContextCreation tests performance of cipher context creation
 func BenchmarkCipherContextCreation(b *testing.B) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -49,7 +49,7 @@ func BenchmarkCipherContextCreation(b *testing.B) {
 	}
 }
 
-// BenchmarkEncryption тестирует производительность шифрования различными алгоритмами
+// BenchmarkEncryption tests encryption performance with different algorithms
 func BenchmarkEncryption(b *testing.B) {
 	testCases := []struct {
 		name   string
@@ -60,7 +60,7 @@ func BenchmarkEncryption(b *testing.B) {
 		{"ChaCha20-Poly1305", auth.CipherChacha20Poly1305},
 	}
 
-	data := make([]byte, 1500)
+	data := make([]byte, 1500) // Typical MTU size
 	if _, err := rand.Read(data); err != nil {
 		b.Fatalf("Failed to generate test data: %v", err)
 	}
@@ -98,7 +98,7 @@ func BenchmarkEncryption(b *testing.B) {
 	}
 }
 
-// BenchmarkDecryption тестирует производительность дешифрования
+// BenchmarkDecryption tests decryption performance
 func BenchmarkDecryption(b *testing.B) {
 	testCases := []struct {
 		name   string
@@ -134,7 +134,7 @@ func BenchmarkDecryption(b *testing.B) {
 				b.Fatalf("Failed to create cipher context: %v", err)
 			}
 
-			// Предварительно шифруем данные
+			// Pre-encrypt test data
 			encrypted, err := ctx.Encrypt(data)
 			if err != nil {
 				b.Fatalf("Failed to encrypt test data: %v", err)
@@ -153,7 +153,7 @@ func BenchmarkDecryption(b *testing.B) {
 	}
 }
 
-// BenchmarkEncryptionDecryptionRoundTrip тестирует полный цикл шифрования-дешифрования
+// BenchmarkEncryptionDecryptionRoundTrip tests full encryption-decryption cycle
 func BenchmarkEncryptionDecryptionRoundTrip(b *testing.B) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -187,7 +187,7 @@ func BenchmarkEncryptionDecryptionRoundTrip(b *testing.B) {
 	}
 }
 
-// BenchmarkConcurrentEncryption тестирует производительность параллельного шифрования
+// BenchmarkConcurrentEncryption tests performance of parallel encryption
 func BenchmarkConcurrentEncryption(b *testing.B) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -199,7 +199,7 @@ func BenchmarkConcurrentEncryption(b *testing.B) {
 		b.Fatalf("Failed to generate test data: %v", err)
 	}
 
-	// Создаем пул контекстов шифрования для каждой горутины
+	// Create pool of cipher contexts for each goroutine
 	numWorkers := 10
 	ctxPool := make([]*auth.CipherContext, numWorkers)
 
@@ -227,7 +227,7 @@ func BenchmarkConcurrentEncryption(b *testing.B) {
 	})
 }
 
-// BenchmarkKeyDerivation тестирует производительность вывода ключей
+// BenchmarkKeyDerivation tests performance of key derivation
 func BenchmarkKeyDerivation(b *testing.B) {
 	masterSecret := make([]byte, 32)
 	salt := make([]byte, 16)
@@ -248,7 +248,7 @@ func BenchmarkKeyDerivation(b *testing.B) {
 	}
 }
 
-// BenchmarkCertificateManagerCreation тестирует производительность создания менеджера сертификатов
+// BenchmarkCertificateManagerCreation tests performance of certificate manager creation
 func BenchmarkCertificateManagerCreation(b *testing.B) {
 	b.ResetTimer()
 
@@ -262,9 +262,9 @@ func BenchmarkCertificateManagerCreation(b *testing.B) {
 	}
 }
 
-// BenchmarkPacketProcessing тестирует производительность обработки пакетов
+// BenchmarkPacketProcessing tests packet processing performance
 func BenchmarkPacketProcessing(b *testing.B) {
-	// Симулируем IPv4 пакет
+	// Simulate IPv4 packet
 	packet := make([]byte, 1500)
 	packet[0] = 0x45 // IPv4, IHL=5
 
@@ -272,7 +272,7 @@ func BenchmarkPacketProcessing(b *testing.B) {
 	b.SetBytes(int64(len(packet)))
 
 	for i := 0; i < b.N; i++ {
-		// Простая обработка пакета - извлечение версии IP
+		// Simple packet processing - extract IP version
 		version := packet[0] >> 4
 		if version != 4 && version != 6 {
 			b.Error("Invalid IP version")
@@ -280,7 +280,7 @@ func BenchmarkPacketProcessing(b *testing.B) {
 	}
 }
 
-// TestHighThroughput тестирует обработку высокой нагрузки
+// TestHighThroughput tests high load processing
 func TestHighThroughput(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping high throughput test in short mode")
@@ -301,7 +301,7 @@ func TestHighThroughput(t *testing.T) {
 		t.Fatalf("Failed to generate test data: %v", err)
 	}
 
-	// Тестируем обработку большого количества пакетов
+	// Test processing of large number of packets
 	numPackets := 100000
 	start := time.Now()
 
@@ -326,13 +326,13 @@ func TestHighThroughput(t *testing.T) {
 	t.Logf("Processed %d packets in %v", numPackets, duration)
 	t.Logf("Throughput: %.2f packets/sec, %.2f Mbps", packetsPerSecond, mbps)
 
-	// Проверяем минимальную производительность
+	// Check minimum performance
 	if packetsPerSecond < 10000 {
 		t.Errorf("Performance too low: %.2f packets/sec (expected at least 10000)", packetsPerSecond)
 	}
 }
 
-// TestConcurrentConnections тестирует обработку множественных соединений
+// TestConcurrentConnections tests handling of multiple connections
 func TestConcurrentConnections(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping concurrent connections test in short mode")
@@ -393,19 +393,19 @@ func TestConcurrentConnections(t *testing.T) {
 		numConnections, packetsPerConnection, duration)
 	t.Logf("Total throughput: %.2f packets/sec", packetsPerSecond)
 
-	// Проверяем что все соединения обработались в разумное время
+	// Check that all connections processed in reasonable time
 	if duration > 30*time.Second {
 		t.Errorf("Concurrent connections test took too long: %v (expected < 30s)", duration)
 	}
 }
 
-// TestMemoryUsage тестирует использование памяти
+// TestMemoryUsage tests memory usage
 func TestMemoryUsage(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping memory usage test in short mode")
 	}
 
-	// Создаем множество контекстов шифрования для симуляции клиентов
+	// Create multiple cipher contexts to simulate clients
 	numClients := 1000
 	contexts := make([]*auth.CipherContext, numClients)
 
@@ -422,7 +422,7 @@ func TestMemoryUsage(t *testing.T) {
 		contexts[i] = ctx
 	}
 
-	// Симулируем работу с данными
+	// Simulate working with data
 	data := make([]byte, 1500)
 	if _, err := rand.Read(data); err != nil {
 		t.Fatalf("Failed to generate test data: %v", err)
@@ -447,7 +447,7 @@ func TestMemoryUsage(t *testing.T) {
 	t.Logf("Successfully processed data for %d clients", numClients)
 }
 
-// BenchmarkLargePackets тестирует производительность с пакетами большого размера
+// BenchmarkLargePackets tests performance with large packets
 func BenchmarkLargePackets(b *testing.B) {
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
@@ -459,7 +459,7 @@ func BenchmarkLargePackets(b *testing.B) {
 		b.Fatalf("Failed to create cipher context: %v", err)
 	}
 
-	// Тестируем разные размеры пакетов
+	// Test different packet sizes
 	sizes := []int{64, 512, 1500, 9000, 65536}
 
 	for _, size := range sizes {

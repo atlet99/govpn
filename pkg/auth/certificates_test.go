@@ -15,7 +15,7 @@ import (
 )
 
 func TestNewCertificateManager(t *testing.T) {
-	// Тест создания с опциями
+	// Test creation with options
 	caPath := "/path/to/ca.crt"
 	certPath := "/path/to/cert.crt"
 	keyPath := "/path/to/key.key"
@@ -46,7 +46,7 @@ func TestNewCertificateManager(t *testing.T) {
 func TestCertificateManagerOptions(t *testing.T) {
 	cm := NewCertificateManager()
 
-	// Тест всех опций
+	// Test all options
 	WithCRLPath("/path/to/crl.pem")(cm)
 	WithDhPath("/path/to/dh.pem")(cm)
 	WithTLSAuthPath("/path/to/ta.key")(cm)
@@ -87,7 +87,7 @@ func TestGetTLSConfigWithoutCertificate(t *testing.T) {
 }
 
 func TestGetTLSConfigSecurity(t *testing.T) {
-	// Создаем временные сертификаты для тестирования
+	// Create temporary certificates for testing
 	tempDir, err := os.MkdirTemp("", "govpn_cert_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -115,7 +115,7 @@ func TestGetTLSConfigSecurity(t *testing.T) {
 		t.Fatalf("Failed to get TLS config: %v", err)
 	}
 
-	// Проверяем настройки безопасности
+	// Check security settings
 	if tlsConfig.MinVersion != tls.VersionTLS13 {
 		t.Error("Expected minimum TLS version to be 1.3")
 	}
@@ -128,12 +128,12 @@ func TestGetTLSConfigSecurity(t *testing.T) {
 		t.Error("Expected client certificate verification to be required")
 	}
 
-	// Проверяем наличие безопасных cipher suites
+	// Check presence of secure cipher suites
 	if len(tlsConfig.CipherSuites) == 0 {
 		t.Error("Expected cipher suites to be configured")
 	}
 
-	// Проверяем предпочтительные кривые
+	// Check preferred curves
 	expectedCurves := []tls.CurveID{tls.X25519, tls.CurveP384, tls.CurveP256}
 	if len(tlsConfig.CurvePreferences) != len(expectedCurves) {
 		t.Error("Expected specific curve preferences")
@@ -143,7 +143,7 @@ func TestGetTLSConfigSecurity(t *testing.T) {
 func TestVerifyClientCertificateWithoutCA(t *testing.T) {
 	cm := NewCertificateManager()
 
-	// Попытка верификации без CA должна вернуть ошибку
+	// Verification attempt without CA should return error
 	err := cm.VerifyClientCertificate([][]byte{{}})
 	if err == nil {
 		t.Error("Expected error when verifying certificate without CA")
@@ -153,7 +153,7 @@ func TestVerifyClientCertificateWithoutCA(t *testing.T) {
 func TestGetClientCommonNameWithInvalidCert(t *testing.T) {
 	cm := NewCertificateManager()
 
-	// Попытка получить Common Name из невалидного сертификата
+	// Attempt to get Common Name from invalid certificate
 	_, err := cm.GetClientCommonName([][]byte{{}})
 	if err == nil {
 		t.Error("Expected error when getting common name from invalid certificate")
@@ -163,13 +163,13 @@ func TestGetClientCommonNameWithInvalidCert(t *testing.T) {
 func TestGetTLSAuthKey(t *testing.T) {
 	cm := NewCertificateManager()
 
-	// Изначально ключ должен быть nil
+	// Initially key should be nil
 	key := cm.GetTLSAuthKey()
 	if key != nil {
 		t.Error("Expected TLS auth key to be nil initially")
 	}
 
-	// Установим ключ вручную для тестирования
+	// Set key manually for testing
 	testKey := []byte("test-tls-auth-key")
 	cm.tlsAuthKey = testKey
 
@@ -180,14 +180,14 @@ func TestGetTLSAuthKey(t *testing.T) {
 }
 
 func TestLoadCACertificateInvalidFile(t *testing.T) {
-	// Создаем временный файл с невалидным содержимым
+	// Create temporary file with invalid content
 	tempFile, err := os.CreateTemp("", "invalid_ca")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	defer os.Remove(tempFile.Name())
 
-	// Записываем невалидное содержимое
+	// Write invalid content
 	if _, err := tempFile.WriteString("invalid certificate data"); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
@@ -221,7 +221,7 @@ func TestGenerateSelfSignedCertificate(t *testing.T) {
 		t.Fatalf("Failed to generate self-signed certificate: %v", err)
 	}
 
-	// Проверяем, что файлы созданы
+	// Check that files were created
 	if _, err := os.Stat(certPath); os.IsNotExist(err) {
 		t.Error("Certificate file was not created")
 	}
@@ -230,22 +230,22 @@ func TestGenerateSelfSignedCertificate(t *testing.T) {
 		t.Error("Key file was not created")
 	}
 
-	// Проверяем, что можем загрузить созданные файлы
+	// Check that we can load the created files
 	_, err = loadCertificateAndKey(certPath, keyPath)
 	if err != nil {
 		t.Errorf("Failed to load generated certificate and key: %v", err)
 	}
 }
 
-// Вспомогательная функция для создания тестового сертификата
+// Helper function to create test certificate
 func generateTestCertificate(certPath, keyPath string) error {
-	// Генерируем приватный ключ
+	// Generate private key
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
 	}
 
-	// Создаем шаблон сертификата
+	// Create certificate template
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
@@ -263,13 +263,13 @@ func generateTestCertificate(certPath, keyPath string) error {
 		BasicConstraintsValid: true,
 	}
 
-	// Создаем сертификат
+	// Create certificate
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
 	if err != nil {
 		return err
 	}
 
-	// Сохраняем сертификат
+	// Save certificate
 	certOut, err := os.Create(certPath)
 	if err != nil {
 		return err
@@ -280,7 +280,7 @@ func generateTestCertificate(certPath, keyPath string) error {
 		return err
 	}
 
-	// Сохраняем ключ
+	// Save key
 	keyOut, err := os.Create(keyPath)
 	if err != nil {
 		return err
@@ -298,13 +298,13 @@ func generateTestCertificate(certPath, keyPath string) error {
 func TestCertificateManagerEmptyPaths(t *testing.T) {
 	cm := NewCertificateManager()
 
-	// Загрузка с пустыми путями должна завершаться успешно
+	// Loading with empty paths should succeed
 	err := cm.LoadCertificates()
 	if err != nil {
 		t.Errorf("Expected no error with empty paths, got: %v", err)
 	}
 
-	// Все поля должны быть nil/пустыми
+	// All fields should be nil/empty
 	if cm.certPool != nil {
 		t.Error("Expected certPool to be nil")
 	}
@@ -327,7 +327,7 @@ func TestCertificateManagerEmptyPaths(t *testing.T) {
 }
 
 func TestErrorTypes(t *testing.T) {
-	// Проверяем, что ошибки имеют правильные сообщения
+	// Check that errors have correct messages
 	expectedErrors := map[error]string{
 		ErrInvalidCertificate:  "invalid certificate",
 		ErrInvalidKey:          "invalid key",

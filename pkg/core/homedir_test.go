@@ -14,14 +14,14 @@ func TestHomeDir(t *testing.T) {
 		t.Error("HomeDir() should not return empty string")
 	}
 
-	// Проверка что это действительно директория
+	// Check that it's actually a directory
 	if info, err := os.Stat(home); err != nil || !info.IsDir() {
 		t.Errorf("HomeDir() returned invalid directory: %s", home)
 	}
 
-	// Проверка специфичная для платформы
+	// Platform-specific check
 	if runtime.GOOS == "windows" {
-		// На Windows должен быть USERPROFILE или HOMEDRIVE+HOMEPATH
+		// On Windows should be USERPROFILE or HOMEDRIVE+HOMEPATH
 		userProfile := os.Getenv("USERPROFILE")
 		homeDrive := os.Getenv("HOMEDRIVE")
 		homePath := os.Getenv("HOMEPATH")
@@ -32,7 +32,7 @@ func TestHomeDir(t *testing.T) {
 			}
 		}
 	} else {
-		// На Unix-системах должен быть HOME
+		// On Unix systems should be HOME
 		expectedHome := os.Getenv("HOME")
 		if expectedHome != "" && home != expectedHome {
 			t.Errorf("HomeDir() returned %s, expected %s", home, expectedHome)
@@ -45,10 +45,10 @@ func TestDefaultConfigDirs(t *testing.T) {
 		t.Error("DefaultConfigDirs should not be empty")
 	}
 
-	// Проверяем что первая директория - системная
+	// Check that the first directory is system-wide
 	systemDir := DefaultConfigDirs[0]
 	if runtime.GOOS == "windows" {
-		// На Windows может быть разные системные пути
+		// On Windows can be different system paths
 		if systemDir == "" {
 			t.Error("System config directory should not be empty")
 		}
@@ -59,7 +59,7 @@ func TestDefaultConfigDirs(t *testing.T) {
 		}
 	}
 
-	// Проверяем что вторая директория - пользовательская
+	// Check that the second directory is user-specific
 	if len(DefaultConfigDirs) < 2 {
 		t.Error("Should have at least user config directory")
 	}
@@ -72,14 +72,14 @@ func TestDefaultConfigDirs(t *testing.T) {
 }
 
 func TestFindConfigFile(t *testing.T) {
-	// Создаем временную директорию для тестов
+	// Create temporary directory for tests
 	tempDir, err := os.MkdirTemp("", "govpn_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Тест случая когда файл не найден
+	// Test case when file is not found
 	originalDirs := DefaultConfigDirs
 	DefaultConfigDirs = []string{tempDir}
 	defer func() { DefaultConfigDirs = originalDirs }()
@@ -89,13 +89,13 @@ func TestFindConfigFile(t *testing.T) {
 		t.Error("Expected error when config file not found")
 	}
 
-	// Создаем файл конфигурации в temp директории
+	// Create config file in temp directory
 	configPath := filepath.Join(tempDir, DefaultConfigName)
 	if err := os.WriteFile(configPath, []byte("test config"), 0644); err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
 	}
 
-	// Теперь файл должен быть найден
+	// Now file should be found
 	foundPath, err := FindConfigFile()
 	if err != nil {
 		t.Errorf("Expected to find config file, got error: %v", err)
@@ -107,13 +107,13 @@ func TestFindConfigFile(t *testing.T) {
 }
 
 func TestFindConfigFileInCurrentDir(t *testing.T) {
-	// Сохраняем оригинальную рабочую директорию
+	// Save original working directory
 	originalWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get working directory: %v", err)
 	}
 
-	// Создаем временную директорию и переходим в неё
+	// Create temporary directory and change to it
 	tempDir, err := os.MkdirTemp("", "govpn_test_current")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
@@ -129,18 +129,18 @@ func TestFindConfigFileInCurrentDir(t *testing.T) {
 		}
 	}()
 
-	// Создаем файл конфигурации в текущей директории
+	// Create config file in current directory
 	configPath := filepath.Join(tempDir, DefaultConfigName)
 	if err := os.WriteFile(configPath, []byte("test config"), 0644); err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
 	}
 
-	// Временно заменяем DefaultConfigDirs на несуществующие пути
+	// Temporarily replace DefaultConfigDirs with non-existent paths
 	originalDirs := DefaultConfigDirs
 	DefaultConfigDirs = []string{"/nonexistent/path"}
 	defer func() { DefaultConfigDirs = originalDirs }()
 
-	// Файл должен быть найден в текущей директории
+	// File should be found in current directory
 	foundPath, err := FindConfigFile()
 	if err != nil {
 		t.Errorf("Expected to find config file in current dir, got error: %v", err)
@@ -152,20 +152,20 @@ func TestFindConfigFileInCurrentDir(t *testing.T) {
 }
 
 func TestListProfiles(t *testing.T) {
-	// Создаем временную директорию для тестов
+	// Create temporary directory for tests
 	tempDir, err := os.MkdirTemp("", "govpn_profiles_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Создаем директорию для профилей
+	// Create profiles directory
 	profilesDir := filepath.Join(tempDir, DefaultProfilesDir)
 	if err := os.MkdirAll(profilesDir, 0755); err != nil {
 		t.Fatalf("Failed to create profiles dir: %v", err)
 	}
 
-	// Создаем несколько тестовых профилей
+	// Create several test profiles
 	testProfiles := []string{"work", "home", "mobile"}
 	for _, profile := range testProfiles {
 		profilePath := filepath.Join(profilesDir, profile+".ovpn")
@@ -174,24 +174,24 @@ func TestListProfiles(t *testing.T) {
 		}
 	}
 
-	// Создаем файл с неправильным расширением (должен быть игнорирован)
+	// Create file with wrong extension (should be ignored)
 	invalidPath := filepath.Join(profilesDir, "invalid.txt")
 	if err := os.WriteFile(invalidPath, []byte("invalid"), 0644); err != nil {
 		t.Fatalf("Failed to create invalid file: %v", err)
 	}
 
-	// Создаем поддиректорию (должна быть игнорирована)
+	// Create subdirectory (should be ignored)
 	subDir := filepath.Join(profilesDir, "subdir")
 	if err := os.MkdirAll(subDir, 0755); err != nil {
 		t.Fatalf("Failed to create subdirectory: %v", err)
 	}
 
-	// Временно заменяем DefaultConfigDirs
+	// Temporarily replace DefaultConfigDirs
 	originalDirs := DefaultConfigDirs
 	DefaultConfigDirs = []string{tempDir}
 	defer func() { DefaultConfigDirs = originalDirs }()
 
-	// Получаем список профилей
+	// Get list of profiles
 	profiles, err := ListProfiles()
 	if err != nil {
 		t.Errorf("ListProfiles() returned error: %v", err)
@@ -201,7 +201,7 @@ func TestListProfiles(t *testing.T) {
 		t.Errorf("Expected %d profiles, got %d", len(testProfiles), len(profiles))
 	}
 
-	// Проверяем что все ожидаемые профили найдены
+	// Check that all expected profiles are found
 	for _, expected := range testProfiles {
 		found := false
 		for _, actual := range profiles {
@@ -217,19 +217,19 @@ func TestListProfiles(t *testing.T) {
 }
 
 func TestListProfilesEmptyDirectory(t *testing.T) {
-	// Создаем временную директорию без профилей
+	// Create temporary directory without profiles
 	tempDir, err := os.MkdirTemp("", "govpn_empty_profiles_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Временно заменяем DefaultConfigDirs
+	// Temporarily replace DefaultConfigDirs
 	originalDirs := DefaultConfigDirs
 	DefaultConfigDirs = []string{tempDir}
 	defer func() { DefaultConfigDirs = originalDirs }()
 
-	// Получаем список профилей
+	// Get list of profiles
 	profiles, err := ListProfiles()
 	if err != nil {
 		t.Errorf("ListProfiles() returned error: %v", err)
@@ -241,7 +241,7 @@ func TestListProfilesEmptyDirectory(t *testing.T) {
 }
 
 func TestFileExists(t *testing.T) {
-	// Создаем временный файл
+	// Create temporary file
 	tempFile, err := os.CreateTemp("", "govpn_file_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
@@ -249,48 +249,48 @@ func TestFileExists(t *testing.T) {
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
 
-	// Тест существующего файла
+	// Test existing file
 	if !fileExists(tempFile.Name()) {
 		t.Errorf("fileExists() should return true for existing file")
 	}
 
-	// Тест несуществующего файла
+	// Test non-existent file
 	if fileExists("/nonexistent/file/path") {
 		t.Errorf("fileExists() should return false for non-existent file")
 	}
 
-	// Создаем временную директорию
+	// Create temporary directory
 	tempDir, err := os.MkdirTemp("", "govpn_dir_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Тест директории (должен вернуть false для директории)
+	// Test directory (should return false for directory)
 	if fileExists(tempDir) {
 		t.Errorf("fileExists() should return false for directory")
 	}
 }
 
 func TestDirExists(t *testing.T) {
-	// Создаем временную директорию
+	// Create temporary directory
 	tempDir, err := os.MkdirTemp("", "govpn_dir_exists_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Тест существующей директории
+	// Test existing directory
 	if !dirExists(tempDir) {
 		t.Errorf("dirExists() should return true for existing directory")
 	}
 
-	// Тест несуществующей директории
+	// Test non-existent directory
 	if dirExists("/nonexistent/directory/path") {
 		t.Errorf("dirExists() should return false for non-existent directory")
 	}
 
-	// Создаем временный файл
+	// Create temporary file
 	tempFile, err := os.CreateTemp("", "govpn_file_exists_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
@@ -298,7 +298,7 @@ func TestDirExists(t *testing.T) {
 	tempFile.Close()
 	defer os.Remove(tempFile.Name())
 
-	// Тест файла (должен вернуть false для файла)
+	// Test file (should return false for file)
 	if dirExists(tempFile.Name()) {
 		t.Errorf("dirExists() should return false for file")
 	}

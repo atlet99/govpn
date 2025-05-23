@@ -101,12 +101,12 @@ func TestCipherContextInitIV(t *testing.T) {
 		t.Fatalf("Failed to initialize IV: %v", err)
 	}
 
-	// GCM должен использовать 12-байтовый IV
+	// GCM should use 12-byte IV
 	if len(ctx.IV) != 12 {
 		t.Errorf("Expected IV length 12 for GCM, got %d", len(ctx.IV))
 	}
 
-	// IV не должен быть нулевым
+	// IV should not be all zeros
 	allZero := true
 	for _, b := range ctx.IV {
 		if b != 0 {
@@ -140,7 +140,7 @@ func TestCipherContextSetIV(t *testing.T) {
 		t.Error("IV was not set correctly")
 	}
 
-	// Тест с неправильной длиной IV
+	// Test with invalid IV length
 	invalidIV := make([]byte, 8)
 	err = ctx.SetIV(invalidIV)
 	if err == nil {
@@ -166,7 +166,7 @@ func TestEncryptDecryptGCM(t *testing.T) {
 
 	plaintext := []byte("Hello, GoVPN World! This is a test message for encryption.")
 
-	// Шифрование
+	// Encryption
 	ciphertext, err := ctx.Encrypt(plaintext)
 	if err != nil {
 		t.Fatalf("Failed to encrypt: %v", err)
@@ -176,7 +176,7 @@ func TestEncryptDecryptGCM(t *testing.T) {
 		t.Error("Ciphertext should not equal plaintext")
 	}
 
-	// Дешифрование
+	// Decryption
 	decrypted, err := ctx.Decrypt(ciphertext)
 	if err != nil {
 		t.Fatalf("Failed to decrypt: %v", err)
@@ -233,12 +233,12 @@ func TestEncryptWithoutIV(t *testing.T) {
 		t.Errorf("Encryption should succeed with auto-generated IV, got error: %v", err)
 	}
 
-	// IV должен быть автоматически сгенерирован
+	// IV should have been automatically generated
 	if len(ctx.IV) == 0 {
 		t.Error("IV should have been automatically generated")
 	}
 
-	// Проверяем, что можем дешифровать
+	// Check that we can decrypt
 	decrypted, err := ctx.Decrypt(ciphertext)
 	if err != nil {
 		t.Errorf("Failed to decrypt: %v", err)
@@ -261,7 +261,7 @@ func TestDecryptInvalidCiphertext(t *testing.T) {
 		t.Fatalf("Failed to initialize IV: %v", err)
 	}
 
-	// Попытка дешифровать невалидные данные
+	// Attempt to decrypt invalid data
 	invalidCiphertext := []byte("invalid ciphertext")
 	_, err = ctx.Decrypt(invalidCiphertext)
 	if err == nil {
@@ -293,12 +293,12 @@ func TestDeriveKeys(t *testing.T) {
 		t.Errorf("Expected HMAC key length 32, got %d", len(hmacKey))
 	}
 
-	// Ключи не должны быть одинаковыми
+	// Keys should not be equal
 	if bytes.Equal(encKey, hmacKey) {
 		t.Error("Encryption key and HMAC key should not be equal")
 	}
 
-	// Производные ключи должны быть детерминированными
+	// Derived keys should be deterministic
 	encKey2, hmacKey2, err := DeriveKeys(masterSecret, salt, 32)
 	if err != nil {
 		t.Fatalf("Failed to derive keys second time: %v", err)
@@ -338,7 +338,7 @@ func TestDeriveKeysWithDifferentSalts(t *testing.T) {
 		t.Fatalf("Failed to derive keys with salt2: %v", err)
 	}
 
-	// Ключи с разными солями должны быть разными
+	// Keys with different salts should be different
 	if bytes.Equal(encKey1, encKey2) {
 		t.Error("Keys derived with different salts should not be equal")
 	}

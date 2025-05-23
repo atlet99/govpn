@@ -323,7 +323,7 @@ func TestVPNStatus(t *testing.T) {
 }
 
 func TestClientInfoStaticValues(t *testing.T) {
-	// Тест с nil значениями и пустыми данными
+	// Test with nil values and empty data
 	client := ClientInfo{
 		CommonName:   "",
 		RemoteAddr:   nil,

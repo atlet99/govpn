@@ -6,14 +6,14 @@ import (
 )
 
 func TestNewDevice(t *testing.T) {
-	// Тест создания устройства с валидными параметрами
+	// Test device creation with valid parameters
 	config := DefaultConfig()
 	config.DeviceName = "test-tun"
 	config.DeviceType = "tun"
 	config.MTU = 1500
 
-	// Note: Этот тест не будет работать без root привилегий на реальной системе
-	// Здесь мы тестируем только валидацию параметров
+	// Note: This test won't work without root privileges on a real system
+	// Here we only test parameter validation
 	if config.DeviceName != "test-tun" {
 		t.Errorf("Expected DeviceName 'test-tun', got '%s'", config.DeviceName)
 	}
@@ -89,9 +89,9 @@ func TestValidateDeviceParams(t *testing.T) {
 			err := config.Validate()
 			hasErr := err != nil
 
-			// Для некоторых случаев валидация может проходить, но создание устройства не удастся
+			// For some cases validation may pass, but device creation will fail
 			if tt.wantErr && !hasErr {
-				// Проверяем специфичные случаи
+				// Check specific cases
 				if tt.deviceType == "invalid" {
 					t.Error("Expected error for invalid device type")
 				}
@@ -104,17 +104,17 @@ func TestValidateDeviceParams(t *testing.T) {
 }
 
 func TestPacketHeader(t *testing.T) {
-	// Тест создания пакета с заголовком
+	// Test packet creation with header
 	payload := []byte("test payload data")
 
-	// Создаем IPv4 пакет для тестирования
+	// Create IPv4 packet for testing
 	ipv4Header := []byte{
 		0x45, 0x00, // Version=4, IHL=5, Type of Service=0
 		0x00, 0x20, // Total Length=32
 		0x12, 0x34, // Identification
 		0x00, 0x00, // Flags=0, Fragment Offset=0
 		0x40, 0x06, // TTL=64, Protocol=TCP
-		0x00, 0x00, // Header Checksum (будет вычислен)
+		0x00, 0x00, // Header Checksum (will be calculated)
 		0xC0, 0xA8, 0x01, 0x01, // Source IP (192.168.1.1)
 		0xC0, 0xA8, 0x01, 0x02, // Destination IP (192.168.1.2)
 	}
@@ -125,19 +125,19 @@ func TestPacketHeader(t *testing.T) {
 		t.Error("IPv4 packet should have at least 20 bytes header")
 	}
 
-	// Проверяем версию IP
+	// Check IP version
 	version := packet[0] >> 4
 	if version != 4 {
 		t.Errorf("Expected IPv4 version 4, got %d", version)
 	}
 
-	// Проверяем IHL (Internet Header Length)
+	// Check IHL (Internet Header Length)
 	ihl := packet[0] & 0x0F
 	if ihl < 5 {
 		t.Errorf("Expected IHL at least 5, got %d", ihl)
 	}
 
-	// Проверяем протокол
+	// Check protocol
 	protocol := packet[9]
 	if protocol != 6 { // TCP
 		t.Errorf("Expected protocol 6 (TCP), got %d", protocol)
@@ -145,10 +145,10 @@ func TestPacketHeader(t *testing.T) {
 }
 
 func TestIPv6Packet(t *testing.T) {
-	// Тест создания IPv6 пакета
+	// Test IPv6 packet creation
 	payload := []byte("test ipv6 payload")
 
-	// Создаем IPv6 пакет для тестирования
+	// Create IPv6 packet for testing
 	ipv6Header := []byte{
 		0x60, 0x00, 0x00, 0x00, // Version=6, Traffic Class=0, Flow Label=0
 		0x00, 0x11, // Payload Length=17
@@ -165,19 +165,19 @@ func TestIPv6Packet(t *testing.T) {
 		t.Error("IPv6 packet should have at least 40 bytes header")
 	}
 
-	// Проверяем версию IP
+	// Check IP version
 	version := packet[0] >> 4
 	if version != 6 {
 		t.Errorf("Expected IPv6 version 6, got %d", version)
 	}
 
-	// Проверяем payload length
+	// Check payload length
 	payloadLen := int(packet[4])<<8 | int(packet[5])
 	if payloadLen != len(payload) {
 		t.Errorf("Expected payload length %d, got %d", len(payload), payloadLen)
 	}
 
-	// Проверяем next header
+	// Check next header
 	nextHeader := packet[6]
 	if nextHeader != 6 { // TCP
 		t.Errorf("Expected next header 6 (TCP), got %d", nextHeader)
@@ -248,7 +248,7 @@ func TestDeviceTypeValidation(t *testing.T) {
 }
 
 func TestPacketParsing(t *testing.T) {
-	// Тест парсинга сетевых пакетов
+	// Test network packet parsing
 	testCases := []struct {
 		name        string
 		packet      []byte
@@ -310,23 +310,23 @@ func TestPacketParsing(t *testing.T) {
 
 			if tc.shouldFail {
 				if version == 4 && len(tc.packet) >= 20 {
-					// IPv4 packet длиной >= 20 байт не должен фейлиться только из-за длины
+					// IPv4 packet with length >= 20 bytes should not fail only due to length
 					if int(version) != tc.expectedVer && tc.expectedVer != 5 {
 						t.Errorf("Packet with version %d should have failed parsing", version)
 					}
 				} else if version == 6 && len(tc.packet) >= 40 {
-					// IPv6 packet длиной >= 40 байт не должен фейлиться только из-за длины
+					// IPv6 packet with length >= 40 bytes should not fail only due to length
 					if int(version) != tc.expectedVer {
 						t.Errorf("Packet with version %d should have failed parsing", version)
 					}
 				}
-				// Для коротких пакетов это ожидаемо
+				// For short packets this is expected
 			} else {
 				if int(version) != tc.expectedVer {
 					t.Errorf("Expected IP version %d, got %d", tc.expectedVer, version)
 				}
 
-				// Дополнительные проверки для валидных пакетов
+				// Additional checks for valid packets
 				if version == 4 && len(tc.packet) < 20 {
 					t.Error("IPv4 packet should have at least 20 bytes")
 				}
@@ -339,13 +339,13 @@ func TestPacketParsing(t *testing.T) {
 }
 
 func TestPacketBufferOperations(t *testing.T) {
-	// Тест операций с буферами пакетов
+	// Test packet buffer operations
 	testData := []byte("Hello, VPN World!")
 
-	// Создаем буфер
+	// Create buffer
 	buffer := bytes.NewBuffer(nil)
 
-	// Записываем данные
+	// Write data
 	n, err := buffer.Write(testData)
 	if err != nil {
 		t.Fatalf("Failed to write to buffer: %v", err)
@@ -355,7 +355,7 @@ func TestPacketBufferOperations(t *testing.T) {
 		t.Errorf("Expected to write %d bytes, wrote %d", len(testData), n)
 	}
 
-	// Читаем данные обратно
+	// Read data back
 	readBuffer := make([]byte, len(testData))
 	n, err = buffer.Read(readBuffer)
 	if err != nil {
@@ -389,7 +389,7 @@ func TestDeviceNameValidation(t *testing.T) {
 			config := DefaultConfig()
 			config.DeviceName = tt.deviceName
 
-			// Простая проверка имени устройства (реальная валидация зависит от ОС)
+			// Simple device name check (real validation depends on OS)
 			isValid := tt.deviceName != "" && len(tt.deviceName) < 50
 
 			if tt.isValid != isValid {

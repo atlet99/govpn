@@ -8,7 +8,7 @@ import (
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
-	// Проверяем сетевые настройки
+	// Check network settings
 	if config.ListenAddress != "0.0.0.0" {
 		t.Errorf("Expected ListenAddress '0.0.0.0', got '%s'", config.ListenAddress)
 	}
@@ -21,7 +21,7 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected Protocol 'udp', got '%s'", config.Protocol)
 	}
 
-	// Проверяем настройки устройства
+	// Check device settings
 	if config.DeviceName != "tun0" {
 		t.Errorf("Expected DeviceName 'tun0', got '%s'", config.DeviceName)
 	}
@@ -34,7 +34,7 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected MTU 1500, got %d", config.MTU)
 	}
 
-	// Проверяем настройки безопасности
+	// Check security settings
 	if config.CipherMode != "AES-256-GCM" {
 		t.Errorf("Expected CipherMode 'AES-256-GCM', got '%s'", config.CipherMode)
 	}
@@ -47,12 +47,12 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("Expected TLSVersion '1.3', got '%s'", config.TLSVersion)
 	}
 
-	// Проверяем тайминги
+	// Check timing settings
 	if config.HandshakeTimeout != 30*time.Second {
 		t.Errorf("Expected HandshakeTimeout 30s, got %v", config.HandshakeTimeout)
 	}
 
-	// Проверяем CLI настройки
+	// Check CLI settings
 	if config.LogLevel != "info" {
 		t.Errorf("Expected LogLevel 'info', got '%s'", config.LogLevel)
 	}
@@ -227,7 +227,7 @@ func TestConfigValidation(t *testing.T) {
 func TestConfigValidationWithValidSettings(t *testing.T) {
 	config := DefaultConfig()
 
-	// Тест с валидными API настройками
+	// Test with valid API settings
 	config.EnableAPI = true
 	config.APIPort = 8080
 	config.APIAuth = true
@@ -237,7 +237,7 @@ func TestConfigValidationWithValidSettings(t *testing.T) {
 		t.Errorf("Valid config should not return error: %v", err)
 	}
 
-	// Тест с файловым логированием
+	// Test with file logging
 	config.LogOutput = "file"
 	config.LogFilePath = "/tmp/govpn.log"
 
@@ -245,9 +245,9 @@ func TestConfigValidationWithValidSettings(t *testing.T) {
 		t.Errorf("Valid config with file logging should not return error: %v", err)
 	}
 
-	// Тест с syslog
+	// Test with syslog
 	config.LogOutput = "syslog"
-	config.LogFilePath = "" // Не требуется для syslog
+	config.LogFilePath = "" // Not required for syslog
 
 	if err := config.Validate(); err != nil {
 		t.Errorf("Valid config with syslog should not return error: %v", err)

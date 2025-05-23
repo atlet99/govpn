@@ -11,16 +11,16 @@ import (
 	"github.com/atlet99/govpn/pkg/auth"
 )
 
-// TestOpenVPNConfigCompatibility тестирует совместимость с форматом конфигураций OpenVPN
+// TestOpenVPNConfigCompatibility tests compatibility with OpenVPN configuration format
 func TestOpenVPNConfigCompatibility(t *testing.T) {
-	// Создаем временную директорию для тестовых конфигураций
+	// Create temporary directory for test configurations
 	tempDir, err := os.MkdirTemp("", "govpn_openvpn_compat_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Образец реальной конфигурации OpenVPN server
+	// Sample real OpenVPN server configuration
 	serverConfig := `
 # OpenVPN Server Configuration
 port 1194
@@ -55,13 +55,13 @@ explicit-exit-notify 1
 		t.Fatalf("Failed to write server config: %v", err)
 	}
 
-	// Парсим конфигурацию как OpenVPN
+	// Parse configuration as OpenVPN
 	settings, err := parseOpenVPNConfig(configPath)
 	if err != nil {
 		t.Errorf("Failed to parse OpenVPN config: %v", err)
 	}
 
-	// Проверяем основные параметры
+	// Check basic parameters
 	if settings["port"] != "1194" {
 		t.Errorf("Expected port 1194, got %s", settings["port"])
 	}
@@ -83,7 +83,7 @@ explicit-exit-notify 1
 	}
 }
 
-// TestClientConfigCompatibility тестирует совместимость с клиентскими конфигурациями OpenVPN
+// TestClientConfigCompatibility tests compatibility with OpenVPN client configurations
 func TestClientConfigCompatibility(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "govpn_client_compat_test")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestClientConfigCompatibility(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Образец клиентской конфигурации OpenVPN
+	// Sample OpenVPN client configuration
 	clientConfig := `
 client
 dev tun
@@ -121,7 +121,7 @@ verb 3
 		t.Errorf("Failed to parse OpenVPN client config: %v", err)
 	}
 
-	// Проверяем клиентские параметры
+	// Check client parameters
 	if _, exists := settings["client"]; !exists {
 		t.Error("Expected client directive to be present")
 	}
@@ -135,9 +135,9 @@ verb 3
 	}
 }
 
-// TestCipherCompatibility тестирует совместимость шифрования с OpenVPN
+// TestCipherCompatibility tests encryption compatibility with OpenVPN
 func TestCipherCompatibility(t *testing.T) {
-	// Тестируем поддерживаемые в OpenVPN алгоритмы шифрования
+	// Test OpenVPN-supported encryption algorithms
 	supportedCiphers := []auth.CipherMode{
 		auth.CipherAES256GCM,
 		auth.CipherAES192GCM,
@@ -167,12 +167,12 @@ func TestCipherCompatibility(t *testing.T) {
 				t.Fatalf("Failed to create cipher context for %s: %v", cipher, err)
 			}
 
-			// Тестируем с разными размерами данных
+			// Test with different data sizes
 			testData := [][]byte{
 				[]byte(""),
 				[]byte("a"),
 				[]byte("Hello, OpenVPN!"),
-				make([]byte, 1024), // Большой блок данных
+				make([]byte, 1024), // Large data block
 			}
 
 			for i, data := range testData {
@@ -196,9 +196,9 @@ func TestCipherCompatibility(t *testing.T) {
 	}
 }
 
-// TestProtocolCompatibility тестирует совместимость протоколов
+// TestProtocolCompatibility tests protocol compatibility
 func TestProtocolCompatibility(t *testing.T) {
-	// Проверяем поддержку протоколов как в OpenVPN
+	// Check support for protocols as in OpenVPN
 	validProtocols := []string{"tcp", "udp", "both"}
 
 	for _, protocol := range validProtocols {
@@ -212,9 +212,9 @@ func TestProtocolCompatibility(t *testing.T) {
 	}
 }
 
-// TestPortRangeCompatibility тестирует совместимость портов
+// TestPortRangeCompatibility tests port range compatibility
 func TestPortRangeCompatibility(t *testing.T) {
-	// OpenVPN обычно использует порты в диапазоне 1-65535
+	// OpenVPN usually uses ports in range 1-65535
 	testPorts := []int{1194, 443, 53, 80, 8080, 65535}
 
 	for _, port := range testPorts {
@@ -228,9 +228,9 @@ func TestPortRangeCompatibility(t *testing.T) {
 	}
 }
 
-// TestCertificatePathCompatibility тестирует совместимость путей к сертификатам
+// TestCertificatePathCompatibility tests certificate path compatibility
 func TestCertificatePathCompatibility(t *testing.T) {
-	// Стандартные пути OpenVPN
+	// Standard OpenVPN paths
 	standardPaths := map[string]string{
 		"ca":   "/etc/openvpn/ca.crt",
 		"cert": "/etc/openvpn/server.crt",
@@ -243,16 +243,16 @@ func TestCertificatePathCompatibility(t *testing.T) {
 	config.CertPath = standardPaths["cert"]
 	config.KeyPath = standardPaths["key"]
 
-	// Валидация не должна завершаться ошибкой из-за путей
-	// (файлы могут не существовать, но пути валидны)
+	// Validation should not fail due to paths
+	// (files may not exist, but paths are valid)
 	if config.CAPath == "" || config.CertPath == "" || config.KeyPath == "" {
 		t.Error("Certificate paths should be preserved from OpenVPN config")
 	}
 }
 
-// TestNetworkCompatibility тестирует совместимость сетевых настроек
+// TestNetworkCompatibility tests network settings compatibility
 func TestNetworkCompatibility(t *testing.T) {
-	// OpenVPN стандартные подсети
+	// OpenVPN standard subnets
 	validNetworks := []string{
 		"10.8.0.0/24",
 		"192.168.1.0/24",
@@ -268,11 +268,11 @@ func TestNetworkCompatibility(t *testing.T) {
 	}
 }
 
-// TestKeepAliveCompatibility тестирует совместимость настроек keepalive
+// TestKeepAliveCompatibility tests keepalive settings compatibility
 func TestKeepAliveCompatibility(t *testing.T) {
 	config := DefaultConfig()
 
-	// OpenVPN стандартные значения keepalive
+	// OpenVPN standard keepalive values
 	config.KeepaliveInterval = 10 // ping each 10 seconds
 	config.KeepaliveTimeout = 120 // timeout after 120 seconds
 
@@ -290,9 +290,9 @@ func TestKeepAliveCompatibility(t *testing.T) {
 	}
 }
 
-// TestDeviceCompatibility тестирует совместимость TUN/TAP устройств
+// TestDeviceCompatibility tests TUN/TAP device compatibility
 func TestDeviceCompatibility(t *testing.T) {
-	// OpenVPN поддерживает оба типа устройств
+	// OpenVPN supports both device types
 	deviceTypes := []string{"tun", "tap"}
 
 	for _, deviceType := range deviceTypes {
@@ -306,14 +306,14 @@ func TestDeviceCompatibility(t *testing.T) {
 	}
 }
 
-// TestCompressionCompatibility тестирует поддержку сжатия
+// TestCompressionCompatibility tests compression support
 func TestCompressionCompatibility(t *testing.T) {
 	config := DefaultConfig()
 
-	// OpenVPN поддерживает LZO compression
+	// OpenVPN supports LZO compression
 	config.CompLZO = true
 
-	// Это не должно вызывать ошибок валидации
+	// This should not cause validation errors
 	err := config.Validate()
 	if err != nil {
 		t.Errorf("LZO compression should be compatible: %v", err)
@@ -324,7 +324,7 @@ func TestCompressionCompatibility(t *testing.T) {
 	}
 }
 
-// parseOpenVPNConfig парсит конфигурационный файл OpenVPN и возвращает настройки
+// parseOpenVPNConfig parses OpenVPN configuration file and returns settings
 func parseOpenVPNConfig(configPath string) (map[string]string, error) {
 	file, err := os.Open(configPath)
 	if err != nil {
@@ -338,12 +338,12 @@ func parseOpenVPNConfig(configPath string) (map[string]string, error) {
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
-		// Пропускаем комментарии и пустые строки
+		// Skip comments and empty lines
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
 			continue
 		}
 
-		// Разбираем строку на ключ и значение
+		// Parse line into key and value
 		parts := strings.Fields(line)
 		if len(parts) >= 1 {
 			key := parts[0]
@@ -358,12 +358,12 @@ func parseOpenVPNConfig(configPath string) (map[string]string, error) {
 	return settings, scanner.Err()
 }
 
-// TestRealWorldScenario тестирует реальный сценарий использования
+// TestRealWorldScenario tests real-world usage scenario
 func TestRealWorldScenario(t *testing.T) {
-	// Создание конфигурации, максимально близкой к реальной OpenVPN
+	// Create configuration as close as possible to real OpenVPN
 	config := DefaultConfig()
 
-	// Типичные настройки production OpenVPN сервера
+	// Typical production OpenVPN server settings
 	config.Port = 1194
 	config.Protocol = "udp"
 	config.DeviceType = "tun"
@@ -375,13 +375,13 @@ func TestRealWorldScenario(t *testing.T) {
 	config.KeepaliveTimeout = 120
 	config.MaxClients = 100
 
-	// Валидация
+	// Validation
 	err := config.Validate()
 	if err != nil {
 		t.Errorf("Real-world OpenVPN configuration should be valid: %v", err)
 	}
 
-	// Проверка, что все критичные параметры установлены правильно
+	// Check that all critical parameters are set correctly
 	if config.CipherMode != "AES-256-GCM" {
 		t.Error("Should use secure cipher mode")
 	}
@@ -395,16 +395,16 @@ func TestRealWorldScenario(t *testing.T) {
 	}
 }
 
-// TestConfigurationMigration тестирует миграцию с OpenVPN конфигураций
+// TestConfigurationMigration tests migration from OpenVPN configurations
 func TestConfigurationMigration(t *testing.T) {
-	// Симулируем процесс миграции с OpenVPN на GoVPN
+	// Simulate migration process from OpenVPN to GoVPN
 	tempDir, err := os.MkdirTemp("", "govpn_migration_test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Старая конфигурация OpenVPN с устаревшими настройками
+	// Legacy OpenVPN configuration with deprecated settings
 	legacyConfig := `
 port 1194
 proto udp
@@ -426,29 +426,29 @@ max-clients 50
 		t.Fatalf("Failed to parse legacy config: %v", err)
 	}
 
-	// Создаем новую конфигурацию GoVPN на основе legacy
+	// Create new GoVPN configuration based on legacy
 	migratedConfig := DefaultConfig()
 
-	// Применяем настройки из legacy конфигурации
+	// Apply settings from legacy configuration
 	if port := settings["port"]; port != "" {
-		migratedConfig.Port = 1194 // В реальности парсили бы строку
+		migratedConfig.Port = 1194 // In reality we would parse the string
 	}
 
 	if proto := settings["proto"]; proto != "" {
 		migratedConfig.Protocol = proto
 	}
 
-	// Модернизируем устаревшие настройки безопасности
-	migratedConfig.CipherMode = "AES-256-GCM" // Обновляем с CBC на GCM
-	migratedConfig.AuthDigest = "SHA512"      // Обновляем с SHA1 на SHA512
+	// Modernize deprecated security settings
+	migratedConfig.CipherMode = "AES-256-GCM" // Upgrade from CBC to GCM
+	migratedConfig.AuthDigest = "SHA512"      // Upgrade from SHA1 to SHA512
 
-	// Проверяем, что миграция прошла успешно
+	// Check that migration was successful
 	err = migratedConfig.Validate()
 	if err != nil {
 		t.Errorf("Migrated configuration should be valid: %v", err)
 	}
 
-	// Проверяем улучшения безопасности
+	// Check security improvements
 	if migratedConfig.CipherMode != "AES-256-GCM" {
 		t.Error("Migration should upgrade cipher to GCM")
 	}
@@ -458,7 +458,7 @@ max-clients 50
 	}
 }
 
-// BenchmarkOpenVPNCompatibility бенчмарк совместимости с OpenVPN
+// BenchmarkOpenVPNCompatibility benchmarks OpenVPN compatibility
 func BenchmarkOpenVPNCompatibility(b *testing.B) {
 	config := DefaultConfig()
 
