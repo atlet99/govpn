@@ -62,6 +62,18 @@ type Config struct {
 	HandshakeTimeout time.Duration // Handshake timeout
 	ReadTimeout      time.Duration // Read timeout
 	WriteTimeout     time.Duration // Write timeout
+
+	// CLI settings
+	ProfileName string // Current profile name
+	ConfigPath  string // Path to current configuration file
+	RunAsDaemon bool   // Whether to run as a daemon
+	LogLevel    string // Log verbosity (error, warning, info, debug, trace)
+	LogOutput   string // Log output (stdout, file, syslog)
+	LogFilePath string // Log file path when LogOutput is "file"
+
+	// Service settings
+	ServiceName    string // Name for system service
+	ServiceEnabled bool   // Whether to enable service
 }
 
 // DefaultConfig returns default configuration
@@ -114,6 +126,16 @@ func DefaultConfig() Config {
 		// Push settings
 		Routes:     []string{},
 		DNSServers: []string{"8.8.8.8", "8.8.4.4"},
+
+		// CLI settings
+		ProfileName: "default",
+		RunAsDaemon: false,
+		LogLevel:    "info",
+		LogOutput:   "stdout",
+
+		// Service settings
+		ServiceName:    "govpn",
+		ServiceEnabled: false,
 	}
 }
 
@@ -157,6 +179,15 @@ func (c *Config) Validate() error {
 		if c.APIAuth && c.APIAuthSecret == "" {
 			return errors.New("API authentication enabled but no auth secret provided")
 		}
+	}
+
+	// Log validation
+	if c.LogOutput != "stdout" && c.LogOutput != "file" && c.LogOutput != "syslog" {
+		return errors.New("log output must be stdout, file, or syslog")
+	}
+
+	if c.LogOutput == "file" && c.LogFilePath == "" {
+		return errors.New("log file path is required when log output is file")
 	}
 
 	return nil
