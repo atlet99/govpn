@@ -34,8 +34,14 @@ func main() {
 	demoRegionalProfiles(logger)
 	fmt.Println()
 
+	// TLS Tunneling demonstration
+	fmt.Println("4. TLS Tunneling Demo")
+	fmt.Println("---------------------")
+	demoTLSTunneling(logger)
+	fmt.Println()
+
 	// Auto-switching demonstration
-	fmt.Println("4. Auto-switching Demo")
+	fmt.Println("5. Auto-switching Demo")
 	fmt.Println("----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -165,6 +171,107 @@ func demoRegionalProfiles(logger *log.Logger) {
 		fmt.Printf("  Success: %s\n", string(deobfuscated))
 		engine.Close()
 	}
+}
+
+func demoTLSTunneling(logger *log.Logger) {
+	// Create TLS tunnel configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodTLSTunnel},
+		PrimaryMethod:   obfuscation.MethodTLSTunnel,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		TLSTunnel: obfuscation.TLSTunnelConfig{
+			ServerName:      "secure.example.com",
+			ALPN:            []string{"h2", "http/1.1"},
+			FakeHTTPHeaders: true,
+		},
+	}
+
+	// Create engine with TLS tunnel
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create TLS tunnel engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("TLS Tunnel method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Server name: %s\n", config.TLSTunnel.ServerName)
+	fmt.Printf("ALPN protocols: %v\n", config.TLSTunnel.ALPN)
+	fmt.Printf("Fake HTTP headers: %v\n", config.TLSTunnel.FakeHTTPHeaders)
+
+	// Test different types of data
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Web traffic", []byte("GET /api/data HTTP/1.1\r\nHost: example.com\r\n\r\n")},
+		{"Video stream", []byte("Video stream chunk #1 with binary data...")},
+		{"File upload", []byte("multipart/form-data; boundary=----WebKitFormBoundary")},
+		{"JSON API", []byte(`{"user":"alice","action":"login","timestamp":1234567890}`)},
+	}
+
+	for _, tc := range testCases {
+		fmt.Printf("\nTesting %s:\n", tc.name)
+		fmt.Printf("Original:     %s\n", string(tc.data))
+
+		// Obfuscate through TLS tunnel
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Deobfuscated: %s\n", string(deobfuscated))
+		fmt.Printf("Round-trip:   %v\n", string(tc.data) == string(deobfuscated))
+	}
+
+	// Show TLS tunnel metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nTLS Tunnel metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+
+	// Test the actual TLS tunnel obfuscator directly
+	fmt.Printf("\nDirect TLS Tunnel test:\n")
+	tlsConfig := &obfuscation.TLSTunnelConfig{
+		ServerName:      "direct.example.com",
+		ALPN:            []string{"h2"},
+		FakeHTTPHeaders: false,
+	}
+
+	tunnel, err := obfuscation.NewTLSTunnel(tlsConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct TLS tunnel: %v", err)
+		return
+	}
+
+	directData := []byte("Direct TLS tunnel test data")
+	obfuscated, err := tunnel.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := tunnel.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", string(directData) == string(deobfuscated))
+
+	// Show TLS tunnel metrics
+	tlsMetrics := tunnel.GetMetrics()
+	fmt.Printf("Direct TLS metrics: %d packets, %d bytes processed\n",
+		tlsMetrics.PacketsProcessed, tlsMetrics.BytesProcessed)
 }
 
 func demoAutoSwitching(logger *log.Logger) {

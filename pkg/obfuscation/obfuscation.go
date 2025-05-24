@@ -3,9 +3,15 @@ package obfuscation
 import (
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
+	mathrand "math/rand"
 	"net"
 	"strings"
 	"sync"
@@ -307,9 +313,187 @@ func (s *stubObfuscator) GetMetrics() ObfuscatorMetrics {
 	return ObfuscatorMetrics{}
 }
 
-// Stub constructors
+// TLSTunnel TLS tunneling obfuscator
+type TLSTunnel struct {
+	config  *TLSTunnelConfig
+	metrics ObfuscatorMetrics
+	mu      sync.RWMutex
+	logger  *log.Logger
+	cert    tls.Certificate
+	rootCAs *x509.CertPool
+}
+
 func NewTLSTunnel(config *TLSTunnelConfig, logger *log.Logger) (Obfuscator, error) {
-	return &stubObfuscator{name: MethodTLSTunnel, logger: logger}, nil
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	tunnel := &TLSTunnel{
+		config: config,
+		logger: logger,
+	}
+
+	// Set defaults
+	if tunnel.config.ServerName == "" {
+		tunnel.config.ServerName = "example.com"
+	}
+	if len(tunnel.config.ALPN) == 0 {
+		tunnel.config.ALPN = []string{"h2", "http/1.1"}
+	}
+
+	// Generate self-signed certificate for TLS tunneling
+	if err := tunnel.generateCertificate(); err != nil {
+		return nil, fmt.Errorf("failed to generate certificate: %w", err)
+	}
+
+	return tunnel, nil
+}
+
+func (t *TLSTunnel) generateCertificate() error {
+	// Generate a private key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			Organization:  []string{"GoVPN"},
+			Country:       []string{"US"},
+			Province:      []string{""},
+			Locality:      []string{"San Francisco"},
+			StreetAddress: []string{""},
+			PostalCode:    []string{""},
+		},
+		NotBefore:   time.Now(),
+		NotAfter:    time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		IPAddresses: []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+		DNSNames:    []string{t.config.ServerName, "localhost"},
+	}
+
+	// Create the certificate
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return fmt.Errorf("failed to create certificate: %w", err)
+	}
+
+	// Create TLS certificate
+	t.cert = tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  privateKey,
+	}
+
+	return nil
+}
+
+func (t *TLSTunnel) Name() ObfuscationMethod {
+	return MethodTLSTunnel
+}
+
+func (t *TLSTunnel) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		t.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	// For TLS tunneling, we encapsulate data in a TLS record
+	// This is a simplified implementation - in real-world usage,
+	// this would be handled by the TLS connection wrapper
+	return data, nil
+}
+
+func (t *TLSTunnel) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		t.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	// For TLS tunneling, deobfuscation is handled by TLS unwrapping
+	return data, nil
+}
+
+func (t *TLSTunnel) WrapConn(conn net.Conn) (net.Conn, error) {
+	// Create TLS configuration
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{t.cert},
+		ServerName:   t.config.ServerName,
+		NextProtos:   t.config.ALPN,
+		MinVersion:   tls.VersionTLS12,
+		// For obfuscation purposes, we accept any certificate
+		InsecureSkipVerify: true,
+	}
+
+	// Wrap connection with TLS
+	tlsConn := tls.Client(conn, tlsConfig)
+
+	// Create wrapped connection with additional features
+	wrappedConn := &tlsTunnelConn{
+		Conn:   tlsConn,
+		tunnel: t,
+		config: t.config,
+	}
+
+	return wrappedConn, nil
+}
+
+func (t *TLSTunnel) IsAvailable() bool {
+	return true
+}
+
+func (t *TLSTunnel) GetMetrics() ObfuscatorMetrics {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.metrics
+}
+
+func (t *TLSTunnel) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.metrics.PacketsProcessed++
+	t.metrics.BytesProcessed += int64(dataSize)
+	t.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		t.metrics.Errors++
+	}
+
+	// Update average processing time
+	if t.metrics.AvgProcessTime == 0 {
+		t.metrics.AvgProcessTime = processingTime
+	} else {
+		t.metrics.AvgProcessTime = (t.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// tlsTunnelConn wraps a TLS connection with additional obfuscation features
+type tlsTunnelConn struct {
+	net.Conn
+	tunnel *TLSTunnel
+	config *TLSTunnelConfig
+}
+
+func (c *tlsTunnelConn) Write(b []byte) (n int, err error) {
+	if c.config.FakeHTTPHeaders && len(b) > 0 {
+		// Add fake HTTP-like headers occasionally to confuse DPI
+		// This is a simplified implementation
+		if mathrand.Intn(10) == 0 { // 10% chance
+			fakeHeader := "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n"
+			headerBytes := []byte(fakeHeader)
+			if len(headerBytes)+len(b) < 65536 { // Avoid too large packets
+				combined := make([]byte, len(headerBytes)+len(b))
+				copy(combined, headerBytes)
+				copy(combined[len(headerBytes):], b)
+				return c.Conn.Write(combined)
+			}
+		}
+	}
+
+	return c.Conn.Write(b)
 }
 
 func NewHTTPMimicry(config *HTTPMimicryConfig, logger *log.Logger) (Obfuscator, error) {
