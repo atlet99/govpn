@@ -76,6 +76,15 @@ type Config struct {
 	ServiceName    string // Name for system service
 	ServiceEnabled bool   // Whether to enable service
 
+	// Obfuscation settings
+	EnableObfuscation     bool     `json:"enable_obfuscation"`
+	ObfuscationMethods    []string `json:"obfuscation_methods"`
+	PrimaryObfuscation    string   `json:"primary_obfuscation"`
+	FallbackObfuscations  []string `json:"fallback_obfuscations"`
+	ObfuscationAutoDetect bool     `json:"obfuscation_auto_detect"`
+	RegionalProfile       string   `json:"regional_profile"`
+	XORKey                string   `json:"xor_key,omitempty"`
+
 	// Legacy settings
 	CompLZO bool // Use LZO compression
 }
@@ -141,6 +150,15 @@ func DefaultConfig() Config {
 		// Service settings
 		ServiceName:    "govpn",
 		ServiceEnabled: false,
+
+		// Obfuscation settings
+		EnableObfuscation:     false,
+		ObfuscationMethods:    []string{"xor_cipher"},
+		PrimaryObfuscation:    "xor_cipher",
+		FallbackObfuscations:  []string{},
+		ObfuscationAutoDetect: false,
+		RegionalProfile:       "",
+		XORKey:                "",
 
 		// Legacy settings
 		CompLZO: false,

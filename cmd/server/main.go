@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/atlet99/govpn/pkg/compat"
 	"github.com/atlet99/govpn/pkg/core"
+	"github.com/atlet99/govpn/pkg/obfuscation"
 	"github.com/atlet99/govpn/pkg/server"
 )
 
@@ -99,6 +101,12 @@ var (
 
 	// Track which flags were explicitly set on the command line
 	explicitFlags = make(map[string]bool)
+
+	// Obfuscation flags
+	enableObfuscation = flag.Bool("obfuscation", false, "Enable traffic obfuscation")
+	obfuscationMethod = flag.String("obfuscation-method", "xor_cipher", "Primary obfuscation method")
+	regionalProfile   = flag.String("regional-profile", "", "Regional obfuscation profile (china, iran, russia)")
+	xorKey            = flag.String("xor-key", "", "XOR key for obfuscation (hex string)")
 )
 
 func main() {
@@ -135,6 +143,21 @@ func main() {
 	// Validate configuration
 	if err := validateServerConfig(vpnConfig); err != nil {
 		log.Fatalf("Invalid configuration: %v", err)
+	}
+
+	// Configure obfuscation if enabled
+	if *enableObfuscation {
+		vpnConfig.EnableObfuscation = true
+		vpnConfig.PrimaryObfuscation = *obfuscationMethod
+		vpnConfig.ObfuscationMethods = []string{*obfuscationMethod}
+		vpnConfig.RegionalProfile = *regionalProfile
+		vpnConfig.XORKey = *xorKey
+		vpnConfig.ObfuscationAutoDetect = true
+
+		log.Printf("Obfuscation enabled with method: %s", *obfuscationMethod)
+		if *regionalProfile != "" {
+			log.Printf("Using regional profile: %s", *regionalProfile)
+		}
 	}
 
 	// Create server configuration
@@ -333,12 +356,15 @@ func loadConfigDir(dir string) (core.Config, error) {
 
 // createConfigFromFlags creates a configuration from command line flags
 func createConfigFromFlags() core.Config {
+	// Convert IP + mask to CIDR format
+	serverNetwork := convertToCIDR(*serverAddr, *serverMask)
+
 	return core.Config{
 		DeviceType:        *device,
 		ListenAddress:     *listenAddr,
 		Protocol:          *proto,
 		Port:              *port,
-		ServerNetwork:     fmt.Sprintf("%s %s", *serverAddr, *serverMask),
+		ServerNetwork:     serverNetwork,
 		DeviceName:        getDefaultDeviceName(),
 		CertPath:          *certFile,
 		KeyPath:           *keyFile,
@@ -662,4 +688,99 @@ func dumpStats() {
 // getVersion returns the current version of the application
 func getVersion() string {
 	return "0.1.0"
+}
+
+// testObfuscationEngine tests the obfuscation engine
+func testObfuscationEngine(config *core.Config) error {
+	log.Println("Testing obfuscation engine...")
+
+	// Create obfuscation configuration
+	obfConfig := &obfuscation.Config{
+		EnabledMethods:   []obfuscation.ObfuscationMethod{obfuscation.ObfuscationMethod(config.PrimaryObfuscation)},
+		PrimaryMethod:    obfuscation.ObfuscationMethod(config.PrimaryObfuscation),
+		FallbackMethods:  []obfuscation.ObfuscationMethod{},
+		AutoDetection:    config.ObfuscationAutoDetect,
+		SwitchThreshold:  3,
+		DetectionTimeout: 5 * time.Second,
+		RegionalProfile:  config.RegionalProfile,
+	}
+
+	// Add XOR key if specified
+	if config.XORKey != "" {
+		obfConfig.XORKey = []byte(config.XORKey)
+	}
+
+	// Create obfuscation engine
+	engine, err := obfuscation.NewEngine(obfConfig, log.New(os.Stdout, "[OBFUSCATION] ", log.LstdFlags))
+	if err != nil {
+		return fmt.Errorf("failed to create obfuscation engine: %w", err)
+	}
+	defer engine.Close()
+
+	// Test obfuscation
+	testData := []byte("Hello, GoVPN! This is a test message for traffic obfuscation.")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		return fmt.Errorf("failed to obfuscate test data: %w", err)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		return fmt.Errorf("failed to deobfuscate test data: %w", err)
+	}
+
+	if string(testData) != string(deobfuscated) {
+		return fmt.Errorf("obfuscation round-trip failed: original != deobfuscated")
+	}
+
+	// Get metrics
+	metrics := engine.GetMetrics()
+	log.Printf("Obfuscation test successful:")
+	log.Printf("  Current method: %s", engine.GetCurrentMethod())
+	log.Printf("  Total packets: %d", metrics.TotalPackets)
+	log.Printf("  Total bytes: %d", metrics.TotalBytes)
+
+	return nil
+}
+
+// convertToCIDR converts IP address and subnet mask to CIDR notation
+func convertToCIDR(ip, mask string) string {
+	// Parse IP address
+	ipAddr := net.ParseIP(ip)
+	if ipAddr == nil {
+		log.Printf("Warning: invalid IP address %s, using default", ip)
+		return "10.8.0.0/24"
+	}
+
+	// Parse subnet mask
+	maskAddr := net.ParseIP(mask)
+	if maskAddr == nil {
+		log.Printf("Warning: invalid subnet mask %s, using default", mask)
+		return fmt.Sprintf("%s/24", ip)
+	}
+
+	// Convert mask to prefix length
+	mask4 := maskAddr.To4()
+	if mask4 == nil {
+		log.Printf("Warning: invalid IPv4 subnet mask %s, using default", mask)
+		return fmt.Sprintf("%s/24", ip)
+	}
+
+	// Calculate prefix length
+	prefixLen := 0
+	for _, b := range mask4 {
+		for i := 7; i >= 0; i-- {
+			if (b>>i)&1 == 1 {
+				prefixLen++
+			} else {
+				break
+			}
+		}
+		if (b>>7)&1 == 0 {
+			break
+		}
+	}
+
+	return fmt.Sprintf("%s/%d", ip, prefixLen)
 }
