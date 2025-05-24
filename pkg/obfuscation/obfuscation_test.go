@@ -774,6 +774,251 @@ func BenchmarkHTTPMimicryObfuscation(b *testing.B) {
 	}
 }
 
+func TestDNSTunnel(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &DNSTunnelConfig{
+		Enabled:        true,
+		DomainSuffix:   "test.example.com",
+		DNSServers:     []string{"8.8.8.8:53", "1.1.1.1:53"},
+		QueryTypes:     []string{"A", "TXT"},
+		EncodingMethod: "base32",
+		MaxPayloadSize: 32,
+		QueryDelay:     50 * time.Millisecond,
+		Subdomain:      "vpn",
+	}
+
+	tunnel, err := NewDNSTunnel(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create DNS tunnel: %v", err)
+	}
+
+	if tunnel.Name() != MethodDNSTunnel {
+		t.Errorf("Expected method name %s, got %s", MethodDNSTunnel, tunnel.Name())
+	}
+
+	if !tunnel.IsAvailable() {
+		t.Error("DNS tunnel should be available")
+	}
+
+	// Test data obfuscation with DNS tunneling
+	testData := []byte("DNS tunnel test data for VPN obfuscation")
+
+	obfuscated, err := tunnel.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Obfuscated data should be larger due to DNS packet structure
+	if len(obfuscated) <= len(testData) {
+		t.Errorf("Expected obfuscated data to be larger than original, got %d <= %d", len(obfuscated), len(testData))
+	}
+
+	// Deobfuscate
+	deobfuscated, err := tunnel.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("DNS tunnel round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check metrics
+	metrics := tunnel.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+
+	// For DNS tunneling, processed bytes will be larger than original due to DNS packet structure
+	if metrics.BytesProcessed < int64(len(testData)*2) {
+		t.Errorf("Expected processed bytes >= %d, got %d", len(testData)*2, metrics.BytesProcessed)
+	}
+}
+
+func TestDNSTunnelDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	tunnel, err := NewDNSTunnel(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create DNS tunnel with default config: %v", err)
+	}
+
+	// Test that DNS tunnel works with defaults
+	testData := []byte("Default config test for DNS tunneling")
+
+	obfuscated, err := tunnel.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with default config: %v", err)
+	}
+
+	deobfuscated, err := tunnel.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with default config: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Default config round-trip failed")
+	}
+}
+
+func TestDNSTunnelDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &DNSTunnelConfig{
+		Enabled: false,
+	}
+
+	tunnel, err := NewDNSTunnel(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled DNS tunnel: %v", err)
+	}
+
+	if tunnel.IsAvailable() {
+		t.Error("Disabled DNS tunnel should not be available")
+	}
+
+	// Test that disabled tunnel passes data through unchanged
+	testData := []byte("Disabled DNS tunnel test")
+
+	obfuscated, err := tunnel.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with disabled tunnel: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Errorf("Disabled tunnel should pass data unchanged")
+	}
+}
+
+func TestDNSTunnelDifferentSizes(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	tunnel, err := NewDNSTunnel(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create DNS tunnel: %v", err)
+	}
+
+	// Test different data sizes for DNS chunking
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Small data", []byte("Hi")},
+		{"Medium data", []byte("This is a medium-sized test packet for DNS tunneling")},
+		{"Large data", bytes.Repeat([]byte("DNS test "), 20)}, // ~180 bytes
+		{"Empty data", []byte{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			obfuscated, err := tunnel.Obfuscate(tc.data)
+			if err != nil {
+				t.Fatalf("Failed to obfuscate %s: %v", tc.name, err)
+			}
+
+			deobfuscated, err := tunnel.Deobfuscate(obfuscated)
+			if err != nil {
+				t.Fatalf("Failed to deobfuscate %s: %v", tc.name, err)
+			}
+
+			if !bytes.Equal(tc.data, deobfuscated) {
+				t.Errorf("%s round-trip failed", tc.name)
+			}
+		})
+	}
+}
+
+func TestEngineWithDNSTunnel(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodDNSTunnel},
+		PrimaryMethod:   MethodDNSTunnel,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		DNSTunnel: DNSTunnelConfig{
+			Enabled:        true,
+			DomainSuffix:   "engine.test.com",
+			DNSServers:     []string{"8.8.8.8:53"},
+			QueryTypes:     []string{"A"},
+			EncodingMethod: "base32",
+			MaxPayloadSize: 24,
+			QueryDelay:     10 * time.Millisecond,
+			Subdomain:      "test",
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with DNS tunnel: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodDNSTunnel {
+		t.Errorf("Expected current method %s, got %s", MethodDNSTunnel, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Engine DNS tunnel test data")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine DNS tunnel round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkDNSTunnelObfuscation(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &DNSTunnelConfig{
+		Enabled:        true,
+		DomainSuffix:   "bench.example.com",
+		DNSServers:     []string{"8.8.8.8:53"},
+		QueryTypes:     []string{"A"},
+		EncodingMethod: "base32",
+		MaxPayloadSize: 32,
+		QueryDelay:     1 * time.Millisecond, // Short delay for benchmarks
+		Subdomain:      "bench",
+	}
+
+	tunnel, err := NewDNSTunnel(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create DNS tunnel: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("DNS bench "), 10) // ~100 bytes
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := tunnel.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("DNS tunnel obfuscation failed: %v", err)
+		}
+	}
+}
+
 func BenchmarkPacketPaddingObfuscation(b *testing.B) {
 	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
 

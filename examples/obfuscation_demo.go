@@ -72,8 +72,14 @@ func main() {
 	demoHTTPMimicry(logger)
 	fmt.Println()
 
+	// DNS Tunneling demonstration
+	fmt.Println("10. DNS Tunneling Demo")
+	fmt.Println("----------------------")
+	demoDNSTunneling(logger)
+	fmt.Println()
+
 	// Auto-switching demonstration
-	fmt.Println("10. Auto-switching Demo")
+	fmt.Println("11. Auto-switching Demo")
 	fmt.Println("-----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -852,6 +858,143 @@ func demoHTTPMimicry(logger *log.Logger) {
 	httpMetrics := mimicry.GetMetrics()
 	fmt.Printf("Direct HTTP metrics: %d packets, %d bytes processed\n",
 		httpMetrics.PacketsProcessed, httpMetrics.BytesProcessed)
+}
+
+func demoDNSTunneling(logger *log.Logger) {
+	// Create DNS tunneling configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodDNSTunnel},
+		PrimaryMethod:   obfuscation.MethodDNSTunnel,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		DNSTunnel: obfuscation.DNSTunnelConfig{
+			Enabled:        true,
+			DomainSuffix:   "demo.govpn.local",
+			DNSServers:     []string{"8.8.8.8:53", "1.1.1.1:53"},
+			QueryTypes:     []string{"A", "TXT", "CNAME"},
+			EncodingMethod: "base32",
+			MaxPayloadSize: 32,
+			QueryDelay:     50 * time.Millisecond,
+			Subdomain:      "tunnel",
+		},
+	}
+
+	// Create engine with DNS tunneling
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create DNS tunneling engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("DNS Tunneling method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Domain suffix: %s\n", config.DNSTunnel.DomainSuffix)
+	fmt.Printf("DNS servers: %v\n", config.DNSTunnel.DNSServers)
+	fmt.Printf("Query types: %v\n", config.DNSTunnel.QueryTypes)
+	fmt.Printf("Max payload size: %d bytes\n", config.DNSTunnel.MaxPayloadSize)
+	fmt.Printf("Query delay: %v\n", config.DNSTunnel.QueryDelay)
+
+	// Test different types of data for DNS tunneling
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Control message", []byte("HELLO_DNS")},
+		{"Authentication", []byte(`{"auth":"token123"}`)},
+		{"Small payload", []byte("Emergency backup communication via DNS tunneling")},
+		{"Binary data", []byte{0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x44, 0x4E, 0x53}},
+		{"Medium data", bytes.Repeat([]byte("DNS "), 25)}, // ~100 bytes
+	}
+
+	for _, tc := range testCases {
+		fmt.Printf("\nTesting %s:\n", tc.name)
+		fmt.Printf("Original size: %d bytes\n", len(tc.data))
+		fmt.Printf("Original data: %s\n", string(tc.data))
+
+		// Apply DNS tunneling
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("DNS packet size: %d bytes (%.1fx expansion)\n",
+			len(obfuscated), float64(len(obfuscated))/float64(len(tc.data)))
+
+		// Show DNS packet structure (first 100 bytes)
+		showBytes := 100
+		if len(obfuscated) < showBytes {
+			showBytes = len(obfuscated)
+		}
+		fmt.Printf("DNS packet preview: %x...\n", obfuscated[:showBytes])
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Restored data: %s\n", string(deobfuscated))
+		fmt.Printf("Round-trip: %v\n", bytes.Equal(tc.data, deobfuscated))
+	}
+
+	// Show DNS tunneling metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nDNS Tunneling metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	if methodMetrics, exists := metrics.MethodMetrics[obfuscation.MethodDNSTunnel]; exists {
+		fmt.Printf("- Average processing time: %v\n", methodMetrics.AvgProcessTime)
+	}
+
+	// Test the actual DNS tunneling obfuscator directly
+	fmt.Printf("\nDirect DNS Tunneling test:\n")
+	dnsConfig := &obfuscation.DNSTunnelConfig{
+		Enabled:        true,
+		DomainSuffix:   "direct.test.local",
+		DNSServers:     []string{"8.8.8.8:53"},
+		QueryTypes:     []string{"TXT"},
+		EncodingMethod: "base32",
+		MaxPayloadSize: 24,
+		QueryDelay:     10 * time.Millisecond,
+		Subdomain:      "direct",
+	}
+
+	tunnel, err := obfuscation.NewDNSTunnel(dnsConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct DNS tunnel: %v", err)
+		return
+	}
+
+	directData := []byte("Direct DNS tunneling test")
+	obfuscated, err := tunnel.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := tunnel.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", bytes.Equal(directData, deobfuscated))
+	fmt.Printf("Direct DNS packet size: %d bytes\n", len(obfuscated))
+
+	// Show DNS tunneling metrics
+	dnsMetrics := tunnel.GetMetrics()
+	fmt.Printf("Direct DNS metrics: %d packets, %d bytes processed\n",
+		dnsMetrics.PacketsProcessed, dnsMetrics.BytesProcessed)
+
+	fmt.Printf("\nDNS Tunneling overview:\n")
+	fmt.Printf("- Encodes VPN data into DNS queries and responses\n")
+	fmt.Printf("- Works through most firewalls (DNS rarely blocked)\n")
+	fmt.Printf("- Uses Base32 encoding for DNS compatibility\n")
+	fmt.Printf("- Supports multiple DNS servers for redundancy\n")
+	fmt.Printf("- Configurable query delays to avoid detection\n")
+	fmt.Printf("- Higher latency but excellent bypass capabilities\n")
+	fmt.Printf("- Ideal for emergency backup communication\n")
 }
 
 func demoFlowWatermarking(logger *log.Logger) {

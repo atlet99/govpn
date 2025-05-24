@@ -26,6 +26,7 @@ The project is in active development (Phase 1). Key implemented features:
 - **Advanced Traffic Obfuscation System** with multiple methods:
   - TLS Tunneling for HTTPS-like traffic
   - HTTP Mimicry for web request simulation
+  - DNS Tunneling for emergency backup communication
   - Packet Padding for size randomization
   - Timing Obfuscation for temporal pattern masking
   - Traffic Padding for volume pattern masking

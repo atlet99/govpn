@@ -69,6 +69,7 @@ type Config struct {
 	FlowWatermark     FlowWatermarkConfig  `json:"flow_watermark"`
 	TLSTunnel         TLSTunnelConfig      `json:"tls_tunnel"`
 	HTTPMimicry       HTTPMimicryConfig    `json:"http_mimicry"`
+	DNSTunnel         DNSTunnelConfig      `json:"dns_tunnel"`
 	XORKey            []byte               `json:"xor_key,omitempty"`
 }
 
@@ -119,6 +120,17 @@ type HTTPMimicryConfig struct {
 	FakeHost      string            `json:"fake_host"`
 	CustomHeaders map[string]string `json:"custom_headers"`
 	MimicWebsite  string            `json:"mimic_website"`
+}
+
+type DNSTunnelConfig struct {
+	Enabled        bool          `json:"enabled"`
+	DomainSuffix   string        `json:"domain_suffix"`
+	DNSServers     []string      `json:"dns_servers"`
+	QueryTypes     []string      `json:"query_types"`
+	EncodingMethod string        `json:"encoding_method"`
+	MaxPayloadSize int           `json:"max_payload_size"`
+	QueryDelay     time.Duration `json:"query_delay"`
+	Subdomain      string        `json:"subdomain"`
 }
 
 // DPIDetector detects DPI blocking
@@ -933,6 +945,443 @@ func (c *httpMimicryConn) Write(b []byte) (n int, err error) {
 	}
 
 	obfuscated, obfErr := c.mimicry.Obfuscate(b)
+	if obfErr != nil {
+		return 0, obfErr
+	}
+
+	_, err = c.Conn.Write(obfuscated)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return the number of original bytes written
+	return len(b), nil
+}
+
+// DNSTunnel DNS tunneling obfuscator for emergency backup communication
+type DNSTunnel struct {
+	config       *DNSTunnelConfig
+	metrics      ObfuscatorMetrics
+	mu           sync.RWMutex
+	logger       *log.Logger
+	resolver     *net.Resolver
+	queryCounter uint32
+	encodingMap  map[byte]string
+	decodingMap  map[string]byte
+}
+
+func NewDNSTunnel(config *DNSTunnelConfig, logger *log.Logger) (Obfuscator, error) {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &DNSTunnelConfig{
+			Enabled: true,
+		}
+	}
+
+	tunnel := &DNSTunnel{
+		config: config,
+		logger: logger,
+		resolver: &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+				d := net.Dialer{
+					Timeout: time.Second * 3,
+				}
+				return d.DialContext(ctx, network, address)
+			},
+		},
+	}
+
+	// Set defaults if not configured
+	if tunnel.config.DomainSuffix == "" {
+		tunnel.config.DomainSuffix = "example.com"
+	}
+	if len(tunnel.config.DNSServers) == 0 {
+		tunnel.config.DNSServers = []string{"8.8.8.8:53", "1.1.1.1:53", "208.67.222.222:53"}
+	}
+	if len(tunnel.config.QueryTypes) == 0 {
+		tunnel.config.QueryTypes = []string{"A", "AAAA", "TXT", "CNAME"}
+	}
+	if tunnel.config.EncodingMethod == "" {
+		tunnel.config.EncodingMethod = "base32"
+	}
+	if tunnel.config.MaxPayloadSize == 0 {
+		tunnel.config.MaxPayloadSize = 32 // Conservative size for DNS subdomain
+	}
+	if tunnel.config.QueryDelay == 0 {
+		tunnel.config.QueryDelay = 100 * time.Millisecond
+	}
+	if tunnel.config.Subdomain == "" {
+		tunnel.config.Subdomain = "api"
+	}
+
+	// Initialize encoding/decoding maps for custom DNS-safe encoding
+	tunnel.initializeEncodingMaps()
+
+	return tunnel, nil
+}
+
+func (d *DNSTunnel) initializeEncodingMaps() {
+	// DNS-safe character set (lowercase letters and numbers only)
+	dnsChars := "abcdefghijklmnopqrstuvwxyz0123456789"
+	d.encodingMap = make(map[byte]string)
+	d.decodingMap = make(map[string]byte)
+
+	// Create 2-character encoding for each byte (base-36 like)
+	for i := 0; i < 256; i++ {
+		b := byte(i)
+		first := dnsChars[i/36]
+		second := dnsChars[i%36]
+		encoded := string([]byte{first, second})
+		d.encodingMap[b] = encoded
+		d.decodingMap[encoded] = b
+	}
+}
+
+func (d *DNSTunnel) Name() ObfuscationMethod {
+	return MethodDNSTunnel
+}
+
+func (d *DNSTunnel) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		d.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !d.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Encode data using DNS tunneling protocol
+	return d.encodeTosDNSQueries(data)
+}
+
+func (d *DNSTunnel) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		d.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !d.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Decode DNS query responses back to original data
+	return d.decodeFromDNSQueries(data)
+}
+
+func (d *DNSTunnel) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &dnsTunnelConn{
+		Conn:   conn,
+		tunnel: d,
+	}, nil
+}
+
+func (d *DNSTunnel) IsAvailable() bool {
+	return d.config.Enabled && len(d.config.DNSServers) > 0
+}
+
+func (d *DNSTunnel) GetMetrics() ObfuscatorMetrics {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.metrics
+}
+
+func (d *DNSTunnel) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.metrics.PacketsProcessed++
+	d.metrics.BytesProcessed += int64(dataSize)
+	d.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		d.metrics.Errors++
+	}
+
+	// Update average processing time
+	if d.metrics.AvgProcessTime == 0 {
+		d.metrics.AvgProcessTime = processingTime
+	} else {
+		d.metrics.AvgProcessTime = (d.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// encodeTosDNSQueries encodes VPN data into DNS query format
+func (d *DNSTunnel) encodeTosDNSQueries(data []byte) ([]byte, error) {
+	// Create DNS query packet structure with VPN data embedded
+	encoded := d.encodeToDNSSafeString(data)
+
+	// Split into chunks that fit in DNS subdomains (max 63 chars per label)
+	chunks := d.splitIntoChunks(encoded, 60) // Leave some room for numbering
+
+	var result []byte
+
+	for i, chunk := range chunks {
+		// Create a DNS query with VPN data in subdomain
+		queryID := d.generateQueryID()
+		subdomain := fmt.Sprintf("%s%02d%s", d.config.Subdomain, i, chunk)
+
+		// Create a mock DNS query packet structure
+		dnsQuery := d.createDNSQuery(queryID, subdomain)
+		result = append(result, dnsQuery...)
+
+		// Add sequence separator
+		result = append(result, 0xFF, 0xFE) // DNS packet separator
+	}
+
+	return result, nil
+}
+
+// decodeFromDNSQueries decodes VPN data from DNS query format
+func (d *DNSTunnel) decodeFromDNSQueries(data []byte) ([]byte, error) {
+	// Parse DNS queries and extract VPN data from subdomains
+	queries := d.parseDNSQueries(data)
+
+	var encodedData string
+	for _, query := range queries {
+		// Extract data from subdomain
+		if chunk := d.extractDataFromSubdomain(query); chunk != "" {
+			encodedData += chunk
+		}
+	}
+
+	// Decode from DNS-safe string back to original data
+	return d.decodeFromDNSSafeString(encodedData)
+}
+
+// encodeToDNSSafeString converts bytes to DNS-safe string
+func (d *DNSTunnel) encodeToDNSSafeString(data []byte) string {
+	var result strings.Builder
+	for _, b := range data {
+		if encoded, exists := d.encodingMap[b]; exists {
+			result.WriteString(encoded)
+		}
+	}
+	return result.String()
+}
+
+// decodeFromDNSSafeString converts DNS-safe string back to bytes
+func (d *DNSTunnel) decodeFromDNSSafeString(encoded string) ([]byte, error) {
+	if len(encoded)%2 != 0 {
+		return nil, fmt.Errorf("invalid encoded string length")
+	}
+
+	var result []byte
+	for i := 0; i < len(encoded); i += 2 {
+		chunk := encoded[i : i+2]
+		if decoded, exists := d.decodingMap[chunk]; exists {
+			result = append(result, decoded)
+		} else {
+			return nil, fmt.Errorf("invalid encoded chunk: %s", chunk)
+		}
+	}
+
+	return result, nil
+}
+
+// splitIntoChunks splits string into chunks of specified size
+func (d *DNSTunnel) splitIntoChunks(data string, chunkSize int) []string {
+	var chunks []string
+	for i := 0; i < len(data); i += chunkSize {
+		end := i + chunkSize
+		if end > len(data) {
+			end = len(data)
+		}
+		chunks = append(chunks, data[i:end])
+	}
+	return chunks
+}
+
+// generateQueryID generates a unique query ID
+func (d *DNSTunnel) generateQueryID() uint16 {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.queryCounter++
+	return uint16(d.queryCounter)
+}
+
+// createDNSQuery creates a mock DNS query packet
+func (d *DNSTunnel) createDNSQuery(queryID uint16, subdomain string) []byte {
+	// Simplified DNS query packet structure
+	// Header (12 bytes) + Question section
+	query := make([]byte, 0, 512)
+
+	// DNS Header
+	query = append(query, byte(queryID>>8), byte(queryID)) // ID
+	query = append(query, 0x01, 0x00)                      // Flags: standard query
+	query = append(query, 0x00, 0x01)                      // Questions: 1
+	query = append(query, 0x00, 0x00)                      // Answer RRs: 0
+	query = append(query, 0x00, 0x00)                      // Authority RRs: 0
+	query = append(query, 0x00, 0x00)                      // Additional RRs: 0
+
+	// Question section: encode domain name
+	fullDomain := subdomain + "." + d.config.DomainSuffix
+	query = append(query, d.encodeDomainName(fullDomain)...)
+	query = append(query, 0x00, 0x01) // Type: A
+	query = append(query, 0x00, 0x01) // Class: IN
+
+	return query
+}
+
+// encodeDomainName encodes domain name in DNS format
+func (d *DNSTunnel) encodeDomainName(domain string) []byte {
+	labels := strings.Split(domain, ".")
+	var encoded []byte
+
+	for _, label := range labels {
+		if len(label) > 0 {
+			encoded = append(encoded, byte(len(label)))
+			encoded = append(encoded, []byte(label)...)
+		}
+	}
+	encoded = append(encoded, 0x00) // Null terminator
+
+	return encoded
+}
+
+// parseDNSQueries parses multiple DNS queries from data
+func (d *DNSTunnel) parseDNSQueries(data []byte) []string {
+	var queries []string
+
+	// Split by DNS packet separator
+	packets := d.splitBytesByPattern(data, []byte{0xFF, 0xFE})
+
+	for _, packet := range packets {
+		if len(packet) < 12 { // Minimum DNS header size
+			continue
+		}
+
+		// Extract domain from question section
+		if domain := d.extractDomainFromQuery(packet); domain != "" {
+			queries = append(queries, domain)
+		}
+	}
+
+	return queries
+}
+
+// splitBytesByPattern splits byte slice by pattern
+func (d *DNSTunnel) splitBytesByPattern(data, pattern []byte) [][]byte {
+	var result [][]byte
+	start := 0
+
+	for i := 0; i <= len(data)-len(pattern); i++ {
+		if d.bytesEqual(data[i:i+len(pattern)], pattern) {
+			if start < i {
+				result = append(result, data[start:i])
+			}
+			start = i + len(pattern)
+			i += len(pattern) - 1
+		}
+	}
+
+	if start < len(data) {
+		result = append(result, data[start:])
+	}
+
+	return result
+}
+
+// bytesEqual compares two byte slices
+func (d *DNSTunnel) bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// extractDomainFromQuery extracts domain name from DNS query packet
+func (d *DNSTunnel) extractDomainFromQuery(packet []byte) string {
+	if len(packet) < 12 {
+		return ""
+	}
+
+	// Skip DNS header (12 bytes)
+	pos := 12
+	domain := ""
+
+	for pos < len(packet) {
+		labelLen := int(packet[pos])
+		if labelLen == 0 {
+			break
+		}
+
+		pos++
+		if pos+labelLen > len(packet) {
+			break
+		}
+
+		if domain != "" {
+			domain += "."
+		}
+		domain += string(packet[pos : pos+labelLen])
+		pos += labelLen
+	}
+
+	return domain
+}
+
+// extractDataFromSubdomain extracts VPN data from DNS subdomain
+func (d *DNSTunnel) extractDataFromSubdomain(domain string) string {
+	// Remove domain suffix
+	if !strings.HasSuffix(domain, "."+d.config.DomainSuffix) {
+		return ""
+	}
+
+	subdomain := strings.TrimSuffix(domain, "."+d.config.DomainSuffix)
+
+	// Remove API prefix and sequence number (first 5 characters)
+	if len(subdomain) <= 5 || !strings.HasPrefix(subdomain, d.config.Subdomain) {
+		return ""
+	}
+
+	// Extract data part (skip api + 2 digit sequence number)
+	datapart := subdomain[len(d.config.Subdomain)+2:]
+	return datapart
+}
+
+// dnsTunnelConn wraps a connection with DNS tunneling
+type dnsTunnelConn struct {
+	net.Conn
+	tunnel *DNSTunnel
+}
+
+func (c *dnsTunnelConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	// Add DNS tunneling delay to simulate real DNS queries
+	time.Sleep(c.tunnel.config.QueryDelay)
+
+	deobfuscated, deobfErr := c.tunnel.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *dnsTunnelConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	// Add DNS tunneling delay to simulate real DNS queries
+	time.Sleep(c.tunnel.config.QueryDelay)
+
+	obfuscated, obfErr := c.tunnel.Obfuscate(b)
 	if obfErr != nil {
 		return 0, obfErr
 	}
@@ -1934,7 +2383,6 @@ type flowWatermarkConn struct {
 	net.Conn
 	watermark *FlowWatermark
 	flowState map[string]interface{}
-	mu        sync.Mutex
 }
 
 func (c *flowWatermarkConn) Read(b []byte) (n int, err error) {
@@ -2050,6 +2498,8 @@ func (e *Engine) initializeObfuscators() error {
 			obfuscator, err = NewTLSTunnel(&e.config.TLSTunnel, e.logger)
 		case MethodHTTPMimicry:
 			obfuscator, err = NewHTTPMimicry(&e.config.HTTPMimicry, e.logger)
+		case MethodDNSTunnel:
+			obfuscator, err = NewDNSTunnel(&e.config.DNSTunnel, e.logger)
 		case MethodXORCipher:
 			obfuscator, err = NewXORCipher(e.config.XORKey, e.logger)
 		case MethodPacketPadding:
