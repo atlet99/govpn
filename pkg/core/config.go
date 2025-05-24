@@ -76,14 +76,83 @@ type Config struct {
 	ServiceName    string // Name for system service
 	ServiceEnabled bool   // Whether to enable service
 
+	// === AUTHENTICATION SETTINGS ===
+	// Basic authentication
+	EnablePasswordAuth   bool   // Enable password authentication
+	AuthHashMethod       string // Hash method (argon2/pbkdf2)
+	AuthArgon2Memory     int    // Argon2 memory in KB
+	AuthArgon2Time       int    // Argon2 time iterations
+	AuthArgon2Threads    int    // Argon2 threads
+	AuthArgon2KeyLength  int    // Argon2 key length
+	AuthPBKDF2Iterations int    // PBKDF2 iterations
+	AuthPBKDF2KeyLength  int    // PBKDF2 key length
+	AuthSaltLength       int    // Salt length
+	AuthSessionTimeout   int    // Session timeout in seconds
+
+	// MFA settings
+	EnableMFA           bool   // Enable multi-factor authentication
+	MFARequiredForAll   bool   // Require MFA for all users
+	MFAIssuer           string // MFA issuer name
+	MFAGracePeriod      int    // Grace period for MFA setup in seconds
+	MFAMaxAttempts      int    // Maximum MFA attempts
+	MFALockoutDuration  int    // MFA lockout duration in seconds
+	MFATOTPEnabled      bool   // Enable TOTP
+	MFATOTPPeriod       int    // TOTP period in seconds
+	MFATOTPDigits       int    // TOTP digits
+	MFATOTPAlgorithm    string // TOTP algorithm
+	MFABackupCodesCount int    // Number of backup codes
+
+	// OIDC settings
+	EnableOIDC              bool     // Enable OIDC authentication
+	OIDCProviderURL         string   // OIDC provider URL
+	OIDCClientID            string   // OIDC client ID
+	OIDCClientSecret        string   // OIDC client secret
+	OIDCRedirectURL         string   // OIDC redirect URL
+	OIDCScopes              []string // OIDC scopes
+	OIDCSessionTimeout      int      // OIDC session timeout in seconds
+	OIDCRefreshTokenEnabled bool     // Enable refresh tokens
+	OIDCPKCEEnabled         bool     // Enable PKCE
+	OIDCClaimUsername       string   // Username claim mapping
+	OIDCClaimEmail          string   // Email claim mapping
+	OIDCClaimGroups         string   // Groups claim mapping
+
+	// LDAP settings
+	EnableLDAP           bool     // Enable LDAP authentication
+	LDAPServer           string   // LDAP server address
+	LDAPPort             int      // LDAP server port
+	LDAPUseSSL           bool     // Use SSL/LDAPS
+	LDAPUseTLS           bool     // Use StartTLS
+	LDAPSkipVerify       bool     // Skip certificate verification
+	LDAPTimeout          int      // Connection timeout in seconds
+	LDAPBindDN           string   // Bind DN for LDAP
+	LDAPBindPassword     string   // Bind password for LDAP
+	LDAPBaseDN           string   // Base DN for searches
+	LDAPUserFilter       string   // User search filter
+	LDAPGroupFilter      string   // Group search filter
+	LDAPUserSearchBase   string   // User search base
+	LDAPGroupSearchBase  string   // Group search base
+	LDAPRequiredGroups   []string // Required groups for access
+	LDAPAdminGroups      []string // Admin groups
+	LDAPUserAttrUsername string   // Username attribute
+	LDAPUserAttrEmail    string   // Email attribute
+	LDAPUserAttrGroups   string   // Groups attribute
+
 	// Obfuscation settings
-	EnableObfuscation     bool     `json:"enable_obfuscation"`
-	ObfuscationMethods    []string `json:"obfuscation_methods"`
-	PrimaryObfuscation    string   `json:"primary_obfuscation"`
-	FallbackObfuscations  []string `json:"fallback_obfuscations"`
-	ObfuscationAutoDetect bool     `json:"obfuscation_auto_detect"`
-	RegionalProfile       string   `json:"regional_profile"`
-	XORKey                string   `json:"xor_key,omitempty"`
+	EnableObfuscation        bool     `json:"enable_obfuscation"`
+	ObfuscationMethods       []string `json:"obfuscation_methods"`
+	PrimaryObfuscation       string   `json:"primary_obfuscation"`
+	FallbackObfuscations     []string `json:"fallback_obfuscations"`
+	ObfuscationAutoDetect    bool     `json:"obfuscation_auto_detect"`
+	RegionalProfile          string   `json:"regional_profile"`
+	XORKey                   string   `json:"xor_key,omitempty"`
+	XORCipherEnabled         bool     // Enable XOR cipher
+	PacketPaddingEnabled     bool     // Enable packet padding
+	PacketPaddingMinSize     int      // Minimum padding size
+	PacketPaddingMaxSize     int      // Maximum padding size
+	TimingObfuscationEnabled bool     // Enable timing obfuscation
+	TLSTunnelEnabled         bool     // Enable TLS tunnel
+	TLSTunnelPort            int      // TLS tunnel port
+	HTTPMimicryEnabled       bool     // Enable HTTP mimicry
 
 	// Legacy settings
 	CompLZO bool // Use LZO compression
@@ -151,14 +220,68 @@ func DefaultConfig() Config {
 		ServiceName:    "govpn",
 		ServiceEnabled: false,
 
+		// === AUTHENTICATION DEFAULTS ===
+		// Basic authentication
+		EnablePasswordAuth:   false,
+		AuthHashMethod:       "argon2",
+		AuthArgon2Memory:     65536, // 64MB
+		AuthArgon2Time:       3,
+		AuthArgon2Threads:    4,
+		AuthArgon2KeyLength:  32,
+		AuthPBKDF2Iterations: 100000,
+		AuthPBKDF2KeyLength:  32,
+		AuthSaltLength:       16,
+		AuthSessionTimeout:   3600, // 1 hour
+
+		// MFA defaults
+		EnableMFA:           false,
+		MFARequiredForAll:   false,
+		MFAIssuer:           "GoVPN",
+		MFAGracePeriod:      300, // 5 minutes
+		MFAMaxAttempts:      5,
+		MFALockoutDuration:  900, // 15 minutes
+		MFATOTPEnabled:      true,
+		MFATOTPPeriod:       30,
+		MFATOTPDigits:       6,
+		MFATOTPAlgorithm:    "SHA1",
+		MFABackupCodesCount: 10,
+
+		// OIDC defaults
+		EnableOIDC:              false,
+		OIDCSessionTimeout:      86400, // 24 hours
+		OIDCRefreshTokenEnabled: true,
+		OIDCPKCEEnabled:         true,
+		OIDCClaimUsername:       "preferred_username",
+		OIDCClaimEmail:          "email",
+		OIDCClaimGroups:         "groups",
+
+		// LDAP defaults
+		EnableLDAP:           false,
+		LDAPPort:             389,
+		LDAPUseSSL:           false,
+		LDAPUseTLS:           true,
+		LDAPSkipVerify:       false,
+		LDAPTimeout:          10,
+		LDAPUserAttrUsername: "sAMAccountName",
+		LDAPUserAttrEmail:    "mail",
+		LDAPUserAttrGroups:   "memberOf",
+
 		// Obfuscation settings
-		EnableObfuscation:     false,
-		ObfuscationMethods:    []string{"xor_cipher"},
-		PrimaryObfuscation:    "xor_cipher",
-		FallbackObfuscations:  []string{},
-		ObfuscationAutoDetect: false,
-		RegionalProfile:       "",
-		XORKey:                "",
+		EnableObfuscation:        false,
+		ObfuscationMethods:       []string{"xor_cipher"},
+		PrimaryObfuscation:       "xor_cipher",
+		FallbackObfuscations:     []string{},
+		ObfuscationAutoDetect:    false,
+		RegionalProfile:          "",
+		XORKey:                   "",
+		XORCipherEnabled:         false,
+		PacketPaddingEnabled:     false,
+		PacketPaddingMinSize:     32,
+		PacketPaddingMaxSize:     128,
+		TimingObfuscationEnabled: false,
+		TLSTunnelEnabled:         false,
+		TLSTunnelPort:            443,
+		HTTPMimicryEnabled:       false,
 
 		// Legacy settings
 		CompLZO: false,

@@ -451,6 +451,92 @@ func convertConfig(openvpnConfig map[string]interface{}) core.Config {
 		KeepaliveTimeout:  getIntValue(openvpnConfig, "keepalive_timeout", 120),
 		LogLevel:          getStringValue(openvpnConfig, "log_level", "info"),
 		RunAsDaemon:       getBoolValue(openvpnConfig, "daemon", false),
+
+		// === AUTHENTICATION PARAMETERS ===
+		// Basic authentication
+		EnablePasswordAuth:   getBoolValue(openvpnConfig, "enable_password_auth", false),
+		AuthHashMethod:       getStringValue(openvpnConfig, "auth_hash_method", "argon2"),
+		AuthArgon2Memory:     getIntValue(openvpnConfig, "auth_argon2_memory", 65536),
+		AuthArgon2Time:       getIntValue(openvpnConfig, "auth_argon2_time", 3),
+		AuthArgon2Threads:    getIntValue(openvpnConfig, "auth_argon2_threads", 4),
+		AuthArgon2KeyLength:  getIntValue(openvpnConfig, "auth_argon2_key_length", 32),
+		AuthPBKDF2Iterations: getIntValue(openvpnConfig, "auth_pbkdf2_iterations", 100000),
+		AuthPBKDF2KeyLength:  getIntValue(openvpnConfig, "auth_pbkdf2_key_length", 32),
+		AuthSaltLength:       getIntValue(openvpnConfig, "auth_salt_length", 16),
+		AuthSessionTimeout:   getIntValue(openvpnConfig, "auth_session_timeout", 3600),
+
+		// MFA parameters
+		EnableMFA:           getBoolValue(openvpnConfig, "mfa_enabled", false),
+		MFARequiredForAll:   getBoolValue(openvpnConfig, "mfa_required_for_all", false),
+		MFAIssuer:           getStringValue(openvpnConfig, "mfa_issuer", "GoVPN"),
+		MFAGracePeriod:      getIntValue(openvpnConfig, "mfa_grace_period", 300),
+		MFAMaxAttempts:      getIntValue(openvpnConfig, "mfa_max_attempts", 5),
+		MFALockoutDuration:  getIntValue(openvpnConfig, "mfa_lockout_duration", 900),
+		MFATOTPEnabled:      getBoolValue(openvpnConfig, "mfa_totp_enabled", true),
+		MFATOTPPeriod:       getIntValue(openvpnConfig, "mfa_totp_period", 30),
+		MFATOTPDigits:       getIntValue(openvpnConfig, "mfa_totp_digits", 6),
+		MFATOTPAlgorithm:    getStringValue(openvpnConfig, "mfa_totp_algorithm", "SHA1"),
+		MFABackupCodesCount: getIntValue(openvpnConfig, "mfa_backup_codes_count", 10),
+
+		// OIDC parameters
+		EnableOIDC:              getBoolValue(openvpnConfig, "oidc_enabled", false),
+		OIDCProviderURL:         getStringValue(openvpnConfig, "oidc_provider_url", ""),
+		OIDCClientID:            getStringValue(openvpnConfig, "oidc_client_id", ""),
+		OIDCClientSecret:        getStringValue(openvpnConfig, "oidc_client_secret", ""),
+		OIDCRedirectURL:         getStringValue(openvpnConfig, "oidc_redirect_url", ""),
+		OIDCScopes:              getStringSlice(openvpnConfig, "oidc_scopes"),
+		OIDCSessionTimeout:      getIntValue(openvpnConfig, "oidc_session_timeout", 86400),
+		OIDCRefreshTokenEnabled: getBoolValue(openvpnConfig, "oidc_refresh_token_enabled", true),
+		OIDCPKCEEnabled:         getBoolValue(openvpnConfig, "oidc_pkce_enabled", true),
+		OIDCClaimUsername:       getStringValue(openvpnConfig, "oidc_claim_username", "preferred_username"),
+		OIDCClaimEmail:          getStringValue(openvpnConfig, "oidc_claim_email", "email"),
+		OIDCClaimGroups:         getStringValue(openvpnConfig, "oidc_claim_groups", "groups"),
+
+		// LDAP parameters
+		EnableLDAP:           getBoolValue(openvpnConfig, "ldap_enabled", false),
+		LDAPServer:           getStringValue(openvpnConfig, "ldap_server", ""),
+		LDAPPort:             getIntValue(openvpnConfig, "ldap_port", 389),
+		LDAPUseSSL:           getBoolValue(openvpnConfig, "ldap_use_ssl", false),
+		LDAPUseTLS:           getBoolValue(openvpnConfig, "ldap_use_tls", true),
+		LDAPSkipVerify:       getBoolValue(openvpnConfig, "ldap_skip_verify", false),
+		LDAPTimeout:          getIntValue(openvpnConfig, "ldap_timeout", 10),
+		LDAPBindDN:           getStringValue(openvpnConfig, "ldap_bind_dn", ""),
+		LDAPBindPassword:     getStringValue(openvpnConfig, "ldap_bind_password", ""),
+		LDAPBaseDN:           getStringValue(openvpnConfig, "ldap_base_dn", ""),
+		LDAPUserFilter:       getStringValue(openvpnConfig, "ldap_user_filter", ""),
+		LDAPGroupFilter:      getStringValue(openvpnConfig, "ldap_group_filter", ""),
+		LDAPUserSearchBase:   getStringValue(openvpnConfig, "ldap_user_search_base", ""),
+		LDAPGroupSearchBase:  getStringValue(openvpnConfig, "ldap_group_search_base", ""),
+		LDAPRequiredGroups:   getStringSlice(openvpnConfig, "ldap_required_groups"),
+		LDAPAdminGroups:      getStringSlice(openvpnConfig, "ldap_admin_groups"),
+		LDAPUserAttrUsername: getStringValue(openvpnConfig, "ldap_user_attr_username", "sAMAccountName"),
+		LDAPUserAttrEmail:    getStringValue(openvpnConfig, "ldap_user_attr_email", "mail"),
+		LDAPUserAttrGroups:   getStringValue(openvpnConfig, "ldap_user_attr_groups", "memberOf"),
+
+		// Obfuscation parameters
+		EnableObfuscation:        getBoolValue(openvpnConfig, "obfuscation_enabled", false),
+		ObfuscationAutoDetect:    getBoolValue(openvpnConfig, "obfuscation_auto_detect", false),
+		PrimaryObfuscation:       getStringValue(openvpnConfig, "obfuscation_primary_method", "xor_cipher"),
+		FallbackObfuscations:     getStringSlice(openvpnConfig, "obfuscation_fallback_methods"),
+		XORCipherEnabled:         getBoolValue(openvpnConfig, "xor_cipher_enabled", false),
+		XORKey:                   getStringValue(openvpnConfig, "xor_cipher_key", ""),
+		PacketPaddingEnabled:     getBoolValue(openvpnConfig, "packet_padding_enabled", false),
+		PacketPaddingMinSize:     getIntValue(openvpnConfig, "packet_padding_min_size", 32),
+		PacketPaddingMaxSize:     getIntValue(openvpnConfig, "packet_padding_max_size", 128),
+		TimingObfuscationEnabled: getBoolValue(openvpnConfig, "timing_obfuscation_enabled", false),
+		TLSTunnelEnabled:         getBoolValue(openvpnConfig, "tls_tunnel_enabled", false),
+		TLSTunnelPort:            getIntValue(openvpnConfig, "tls_tunnel_port", 443),
+		HTTPMimicryEnabled:       getBoolValue(openvpnConfig, "http_mimicry_enabled", false),
+	}
+
+	// Set default obfuscation methods if enabled but no methods specified
+	if config.EnableObfuscation && len(config.ObfuscationMethods) == 0 {
+		config.ObfuscationMethods = []string{config.PrimaryObfuscation}
+	}
+
+	// Set default OIDC scopes if enabled but no scopes specified
+	if config.EnableOIDC && len(config.OIDCScopes) == 0 {
+		config.OIDCScopes = []string{"openid", "profile", "email"}
 	}
 
 	return config
