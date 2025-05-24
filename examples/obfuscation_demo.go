@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atlet99/govpn/pkg/auth"
 	"github.com/atlet99/govpn/pkg/obfuscation"
+	"github.com/pquerna/otp"
 )
 
 func main() {
@@ -88,6 +90,12 @@ func main() {
 	fmt.Println("12. Auto-switching Demo")
 	fmt.Println("-----------------------")
 	demoAutoSwitching(logger)
+	fmt.Println()
+
+	// Authentication and Authorization demonstration
+	fmt.Println("13. Authentication & Authorization Demo")
+	fmt.Println("---------------------------------------")
+	demoAuthentication(logger)
 	fmt.Println()
 
 	fmt.Println("Demo completed successfully!")
@@ -1378,4 +1386,462 @@ func demoAutoSwitching(logger *log.Logger) {
 	metrics := engine.GetMetrics()
 	fmt.Printf("Final metrics: %d packets processed, %d method switches\n",
 		metrics.TotalPackets, metrics.MethodSwitches)
+}
+
+func demoAuthentication(logger *log.Logger) {
+	fmt.Println("=== GoVPN Authentication System Demo ===")
+
+	// Basic authentication demonstration
+	fmt.Println("1. Basic Local Authentication Demo")
+	demoBasicAuth()
+
+	fmt.Println("\n" + strings.Repeat("=", 60) + "\n")
+
+	// MFA demonstration
+	fmt.Println("2. Multi-Factor Authentication (MFA) Demo")
+	demoMFA()
+
+	fmt.Println("\n" + strings.Repeat("=", 60) + "\n")
+
+	// User management demonstration
+	fmt.Println("3. User Management Demo")
+	demoUserManagement()
+
+	fmt.Println("\n" + strings.Repeat("=", 60) + "\n")
+
+	// LDAP demonstration (without real connection)
+	fmt.Println("4. LDAP Configuration Demo")
+	demoLDAPConfig()
+
+	fmt.Println("\n" + strings.Repeat("=", 60) + "\n")
+
+	// OIDC demonstration (without real connection)
+	fmt.Println("5. OIDC Configuration Demo")
+	demoOIDCConfig()
+}
+
+func demoBasicAuth() {
+	// Create authentication manager with basic configuration
+	config := auth.DefaultAuthConfig()
+	config.HashMethod = "argon2" // Use Argon2 for security
+
+	authManager, err := auth.NewAuthManager(config)
+	if err != nil {
+		log.Fatalf("Error creating auth manager: %v", err)
+	}
+	defer authManager.Close()
+
+	fmt.Printf("✓ Created authentication manager with hashing method: %s\n", config.HashMethod)
+
+	// Create test user
+	username := "alice"
+	password := "secure_password_123"
+
+	user, err := authManager.CreateUser(username, password)
+	if err != nil {
+		log.Printf("Error creating user: %v", err)
+		return
+	}
+
+	fmt.Printf("✓ Created user: %s (ID: %s)\n", user.Username, user.ID)
+	fmt.Printf("  - Source: %s\n", user.Source)
+	fmt.Printf("  - Active: %t\n", user.IsActive)
+	fmt.Printf("  - Roles: %v\n", user.Roles)
+	fmt.Printf("  - Created: %s\n", user.CreatedAt.Format("2006-01-02 15:04:05"))
+
+	// Successful authentication
+	result, err := authManager.AuthenticateUser(username, password)
+	if err != nil {
+		log.Printf("Authentication error: %v", err)
+		return
+	}
+
+	fmt.Printf("✓ Successfully authenticated user: %s\n", result.User.Username)
+	fmt.Printf("  - Authentication source: %s\n", result.Source)
+	fmt.Printf("  - Requires MFA: %t\n", result.RequiresMFA)
+	fmt.Printf("  - Last login: %s\n", result.User.LastLogin.Format("2006-01-02 15:04:05"))
+
+	// Attempt authentication with wrong password
+	_, err = authManager.AuthenticateUser(username, "wrong_password")
+	if err != nil {
+		fmt.Printf("✓ Correctly rejected authentication with wrong password: %v\n", err)
+	}
+
+	// Test different hashing algorithms
+	fmt.Println("\n--- Testing Hashing Algorithms ---")
+	testHashingMethods()
+}
+
+func demoMFA() {
+	// Configuration with MFA enabled
+	config := auth.DefaultAuthConfig()
+	config.EnableMFA = true
+	config.MFA = &auth.MFAConfig{
+		Enabled:          true,
+		RequiredForAll:   false, // MFA not required for all by default
+		TOTPEnabled:      true,
+		HOTPEnabled:      false,
+		BackupCodesCount: 10,
+		TOTPSettings: auth.TOTPSettings{
+			Period:    30,                // 30 seconds
+			Digits:    otp.DigitsSix,     // 6 digits using standard library
+			Algorithm: otp.AlgorithmSHA1, // SHA1 using standard library
+			Skew:      1,                 // Allowed deviation ±1 period
+		},
+		Issuer:          "GoVPN Demo",
+		GracePeriod:     5 * time.Minute,
+		MaxAttempts:     5,
+		LockoutDuration: 15 * time.Minute,
+	}
+
+	authManager, err := auth.NewAuthManager(config)
+	if err != nil {
+		log.Fatalf("Error creating auth manager with MFA: %v", err)
+	}
+	defer authManager.Close()
+
+	fmt.Printf("✓ Created authentication manager with MFA support\n")
+
+	username := "bob"
+	email := "bob@company.com"
+
+	// Check initial MFA status
+	status := authManager.GetMFAStatus(username)
+	fmt.Printf("✓ Initial MFA status for %s: enabled=%v, setup_complete=%v\n",
+		username, status["enabled"], status["setup_complete"])
+
+	// Setup TOTP for user
+	totpData, err := authManager.SetupMFA(username, email)
+	if err != nil {
+		log.Printf("Error setting up MFA: %v", err)
+		return
+	}
+
+	fmt.Printf("✓ TOTP setup for user %s:\n", username)
+	fmt.Printf("  - Secret key: %s\n", totpData.Secret)
+	fmt.Printf("  - QR code URL: %s\n", totpData.URL)
+	fmt.Printf("  - Backup codes: %d\n", len(totpData.BackupCodes))
+	fmt.Printf("  - First 3 backup codes: %v\n", totpData.BackupCodes[:3])
+
+	// TOTP code verification simulation (in reality user inputs code from app)
+	fmt.Println("\n--- TOTP Verification Simulation ---")
+
+	// In real application this would be actual TOTP code
+	// For demonstration we just show the process
+	fmt.Printf("📱 User should scan QR code in authenticator app\n")
+	fmt.Printf("📱 Then enter 6-digit code to confirm setup\n")
+
+	// Updated MFA status
+	status = authManager.GetMFAStatus(username)
+	fmt.Printf("✓ MFA status after setup: %+v\n", status)
+}
+
+func demoUserManagement() {
+	authManager, err := auth.NewAuthManager(auth.DefaultAuthConfig())
+	if err != nil {
+		log.Fatalf("Error creating auth manager: %v", err)
+	}
+	defer authManager.Close()
+
+	// Create multiple users
+	users := []struct {
+		username string
+		password string
+		roles    []string
+	}{
+		{"admin", "admin_password_123", []string{"admin", "user"}},
+		{"user1", "user1_password_456", []string{"user"}},
+		{"user2", "user2_password_789", []string{"user", "guest"}},
+		{"operator", "operator_password_000", []string{"operator", "user"}},
+	}
+
+	fmt.Println("--- Creating Users ---")
+	for _, userData := range users {
+		user, err := authManager.CreateUser(userData.username, userData.password)
+		if err != nil {
+			log.Printf("Error creating user %s: %v", userData.username, err)
+			continue
+		}
+
+		fmt.Printf("✓ Created user: %s\n", user.Username)
+
+		// Add additional roles
+		for _, role := range userData.roles {
+			if role != "user" { // user role already added by default
+				err = authManager.AddUserRole(userData.username, role)
+				if err != nil {
+					log.Printf("Error adding role %s to user %s: %v", role, userData.username, err)
+				}
+			}
+		}
+
+		updatedUser, _ := authManager.GetUser(userData.username)
+		fmt.Printf("  - Roles: %v\n", updatedUser.Roles)
+	}
+
+	fmt.Println("\n--- List of All Users ---")
+	allUsers := authManager.ListUsers()
+	for username, user := range allUsers {
+		fmt.Printf("User: %-10s | Active: %-5t | Roles: %v | Created: %s\n",
+			username, user.IsActive, user.Roles, user.CreatedAt.Format("2006-01-02 15:04:05"))
+	}
+
+	fmt.Println("\n--- User Management ---")
+	testUser := "user1"
+
+	// Add role
+	err = authManager.AddUserRole(testUser, "moderator")
+	if err != nil {
+		log.Printf("Error adding role: %v", err)
+	} else {
+		fmt.Printf("✓ Added 'moderator' role to user %s\n", testUser)
+	}
+
+	// Update password
+	newPassword := "new_secure_password_456"
+	err = authManager.UpdatePassword(testUser, newPassword)
+	if err != nil {
+		log.Printf("Error updating password: %v", err)
+	} else {
+		fmt.Printf("✓ Updated password for user %s\n", testUser)
+	}
+
+	// Test new password
+	_, err = authManager.AuthenticateUser(testUser, newPassword)
+	if err != nil {
+		log.Printf("Error authenticating with new password: %v", err)
+	} else {
+		fmt.Printf("✓ Authentication with new password successful\n")
+	}
+
+	// Deactivate user
+	err = authManager.SetUserActive(testUser, false)
+	if err != nil {
+		log.Printf("Error deactivating user: %v", err)
+	} else {
+		fmt.Printf("✓ User %s deactivated\n", testUser)
+	}
+
+	// Try to authenticate deactivated user
+	_, err = authManager.AuthenticateUser(testUser, newPassword)
+	if err != nil {
+		fmt.Printf("✓ Correctly rejected authentication of deactivated user: %v\n", err)
+	}
+
+	// Remove role
+	err = authManager.RemoveUserRole("admin", "admin")
+	if err != nil {
+		log.Printf("Error removing role: %v", err)
+	} else {
+		fmt.Printf("✓ Removed 'admin' role from user admin\n")
+	}
+
+	// Show updated admin user
+	adminUser, exists := authManager.GetUser("admin")
+	if exists {
+		fmt.Printf("✓ User admin after role removal: roles=%v\n", adminUser.Roles)
+	}
+}
+
+func demoLDAPConfig() {
+	// LDAP configuration examples for different scenarios
+	fmt.Println("--- LDAP Configuration for Active Directory ---")
+
+	adConfig := &auth.LDAPConfig{
+		Enabled:         true,
+		Server:          "dc.company.com",
+		Port:            389,
+		UseSSL:          false,
+		UseTLS:          true,
+		SkipVerify:      false,
+		Timeout:         10 * time.Second,
+		BindDN:          "cn=ldap-reader,ou=service-accounts,dc=company,dc=com",
+		BindPassword:    "service-account-password",
+		BaseDN:          "dc=company,dc=com",
+		UserFilter:      "(&(objectClass=user)(sAMAccountName=%s))",
+		UserSearchBase:  "ou=users,dc=company,dc=com",
+		GroupSearchBase: "ou=groups,dc=company,dc=com",
+		UserAttributes: auth.UserAttributes{
+			Username:    "sAMAccountName",
+			Email:       "mail",
+			FirstName:   "givenName",
+			LastName:    "sn",
+			DisplayName: "displayName",
+			Groups:      "memberOf",
+		},
+		RequiredGroups:     []string{"CN=VPN-Users,ou=groups,dc=company,dc=com"},
+		AdminGroups:        []string{"CN=VPN-Admins,ou=groups,dc=company,dc=com"},
+		ConnectionPoolSize: 10,
+		MaxRetries:         3,
+		RetryDelay:         time.Second,
+		CacheEnabled:       true,
+		CacheTimeout:       5 * time.Minute,
+	}
+
+	fmt.Printf("✓ Server: %s:%d\n", adConfig.Server, adConfig.Port)
+	fmt.Printf("✓ Security: SSL=%t, TLS=%t\n", adConfig.UseSSL, adConfig.UseTLS)
+	fmt.Printf("✓ Base DN: %s\n", adConfig.BaseDN)
+	fmt.Printf("✓ User filter: %s\n", adConfig.UserFilter)
+	fmt.Printf("✓ Required groups: %v\n", adConfig.RequiredGroups)
+	fmt.Printf("✓ Admin groups: %v\n", adConfig.AdminGroups)
+	fmt.Printf("✓ Caching: enabled for %v\n", adConfig.CacheTimeout)
+
+	fmt.Println("\n--- LDAP Configuration for OpenLDAP ---")
+
+	openLDAPConfig := &auth.LDAPConfig{
+		Enabled:         true,
+		Server:          "ldap.company.com",
+		Port:            389,
+		UseSSL:          false,
+		UseTLS:          true,
+		BindDN:          "cn=readonly,dc=company,dc=com",
+		BindPassword:    "readonly-password",
+		BaseDN:          "dc=company,dc=com",
+		UserFilter:      "(&(objectClass=posixAccount)(uid=%s))",
+		UserSearchBase:  "ou=people,dc=company,dc=com",
+		GroupSearchBase: "ou=groups,dc=company,dc=com",
+		UserAttributes: auth.UserAttributes{
+			Username:    "uid",
+			Email:       "mail",
+			FirstName:   "givenName",
+			LastName:    "sn",
+			DisplayName: "cn",
+			Groups:      "memberOf",
+		},
+		RequiredGroups: []string{"cn=vpn-users,ou=groups,dc=company,dc=com"},
+		AdminGroups:    []string{"cn=vpn-admins,ou=groups,dc=company,dc=com"},
+	}
+
+	fmt.Printf("✓ OpenLDAP Server: %s:%d\n", openLDAPConfig.Server, openLDAPConfig.Port)
+	fmt.Printf("✓ User filter: %s\n", openLDAPConfig.UserFilter)
+	fmt.Printf("✓ Username attribute: %s\n", openLDAPConfig.UserAttributes.Username)
+
+	// Create auth manager with LDAP (without real connection)
+	config := auth.DefaultAuthConfig()
+	config.EnableLDAP = true
+	config.LDAP = adConfig
+
+	fmt.Println("\n--- Creating Manager with LDAP (simulation) ---")
+	fmt.Printf("✓ LDAP configuration prepared\n")
+	fmt.Printf("✓ In real environment, connection to %s would be established\n", adConfig.Server)
+	fmt.Printf("✓ Bind would be performed with account: %s\n", adConfig.BindDN)
+	fmt.Printf("✓ Connection pool of %d connections would be configured\n", adConfig.ConnectionPoolSize)
+}
+
+func demoOIDCConfig() {
+	fmt.Println("--- OIDC Configuration for Keycloak (using standard golang.org/x/oauth2) ---")
+
+	keycloakConfig := &auth.OIDCConfig{
+		Enabled:          true,
+		ProviderURL:      "https://auth.company.com/realms/company",
+		ClientID:         "govpn-client",
+		ClientSecret:     "govpn-client-secret-very-secure",
+		RedirectURL:      "https://vpn.company.com/auth/callback",
+		Scopes:           []string{"openid", "profile", "email", "groups"},
+		IssuerValidation: true,
+		RequiredClaims:   map[string]string{"email_verified": "true"},
+		ClaimMappings: auth.ClaimMappings{
+			Username:    "preferred_username",
+			Email:       "email",
+			FirstName:   "given_name",
+			LastName:    "family_name",
+			Groups:      "groups",
+			Roles:       "realm_access.roles",
+			DisplayName: "name",
+		},
+		SessionTimeout:      24 * time.Hour,
+		RefreshTokenEnabled: true,
+		DeviceFlowEnabled:   true,
+		PkceEnabled:         true,
+	}
+
+	fmt.Printf("✓ OIDC Provider: %s\n", keycloakConfig.ProviderURL)
+	fmt.Printf("✓ Client ID: %s\n", keycloakConfig.ClientID)
+	fmt.Printf("✓ Redirect URL: %s\n", keycloakConfig.RedirectURL)
+	fmt.Printf("✓ Scopes: %v\n", keycloakConfig.Scopes)
+	fmt.Printf("✓ PKCE enabled: %t\n", keycloakConfig.PkceEnabled)
+	fmt.Printf("✓ Device flow enabled: %t\n", keycloakConfig.DeviceFlowEnabled)
+	fmt.Printf("✓ Session timeout: %v\n", keycloakConfig.SessionTimeout)
+
+	fmt.Println("\n--- OIDC Configuration for Auth0 (using standard golang.org/x/oauth2) ---")
+
+	auth0Config := &auth.OIDCConfig{
+		Enabled:      true,
+		ProviderURL:  "https://company.auth0.com",
+		ClientID:     "your-auth0-client-id",
+		ClientSecret: "your-auth0-client-secret",
+		RedirectURL:  "https://vpn.company.com/auth/auth0/callback",
+		Scopes:       []string{"openid", "profile", "email"},
+		ClaimMappings: auth.ClaimMappings{
+			Username:    "nickname",
+			Email:       "email",
+			FirstName:   "given_name",
+			LastName:    "family_name",
+			DisplayName: "name",
+			Groups:      "https://company.com/groups", // Custom claim
+			Roles:       "https://company.com/roles",  // Custom claim
+		},
+		SessionTimeout:      8 * time.Hour,
+		RefreshTokenEnabled: true,
+		PkceEnabled:         true,
+	}
+
+	fmt.Printf("✓ Auth0 Domain: %s\n", auth0Config.ProviderURL)
+	fmt.Printf("✓ Custom claims for groups: %s\n", auth0Config.ClaimMappings.Groups)
+	fmt.Printf("✓ Custom claims for roles: %s\n", auth0Config.ClaimMappings.Roles)
+
+	fmt.Println("\n--- Standard OAuth2 Library Benefits ---")
+	fmt.Printf("✅ Using golang.org/x/oauth2 instead of custom implementation\n")
+	fmt.Printf("✅ Automatic endpoint discovery via .well-known/openid_configuration\n")
+	fmt.Printf("✅ Built-in PKCE support with oauth2.S256ChallengeOption()\n")
+	fmt.Printf("✅ Proper ID token verification with github.com/coreos/go-oidc\n")
+	fmt.Printf("✅ Automatic token refresh with oauth2.TokenSource\n")
+	fmt.Printf("✅ Standard device flow support with oauth2.Config.DeviceAuth()\n")
+	fmt.Printf("✅ Secure token revocation through standard interfaces\n")
+	fmt.Printf("✅ Battle-tested security and compatibility\n")
+
+	fmt.Println("\n--- OIDC Authentication Process (Standard Library) ---")
+	fmt.Printf("1. 🌐 User navigates to VPN server\n")
+	fmt.Printf("2. 🔄 oauth2.Config.AuthCodeURL() generates authorization URL with PKCE\n")
+	fmt.Printf("3. 🔐 User authenticates with OIDC provider\n")
+	fmt.Printf("4. 🔙 Provider redirects user back with authorization code\n")
+	fmt.Printf("5. 🎫 oauth2.Config.Exchange() exchanges code for tokens securely\n")
+	fmt.Printf("6. 🔍 oidc.IDTokenVerifier.Verify() validates ID token signature\n")
+	fmt.Printf("7. 👤 oidc.Provider.UserInfo() gets additional user information\n")
+	fmt.Printf("8. ♻️ oauth2.TokenSource automatically refreshes expired tokens\n")
+	fmt.Printf("9. ✅ User is authenticated and can use VPN\n")
+
+	// Create auth manager with OIDC (without real connection)
+	config := auth.DefaultAuthConfig()
+	config.EnableOIDC = true
+	config.OIDC = keycloakConfig
+
+	fmt.Println("\n--- Creating Manager with Standard OIDC (simulation) ---")
+	fmt.Printf("✓ Standard OIDC configuration prepared\n")
+	fmt.Printf("✓ In real environment, the following would happen:\n")
+	fmt.Printf("  - oidc.NewProvider() performs endpoint discovery\n")
+	fmt.Printf("  - Automatic JWK fetching for signature verification\n")
+	fmt.Printf("  - oauth2.Config setup with discovered endpoints\n")
+	fmt.Printf("  - oidc.IDTokenVerifier initialization with proper validation\n")
+	fmt.Printf("  - Secure session management with automatic token refresh\n")
+	fmt.Printf("✓ Much more secure and robust than custom implementation!\n")
+}
+
+func testHashingMethods() {
+	// Demonstration of different hashing method configurations
+	fmt.Printf("✓ Supported hashing algorithms:\n")
+	fmt.Printf("  - Argon2: modern algorithm, resistant to GPU attacks\n")
+	fmt.Printf("  - PBKDF2: standard algorithm with high iteration count\n")
+
+	// Argon2 configuration
+	argonConfig := auth.DefaultAuthConfig()
+	argonConfig.HashMethod = "argon2"
+	fmt.Printf("✓ Argon2 parameters: memory=%d KB, time=%d, threads=%d\n",
+		argonConfig.Argon2Memory, argonConfig.Argon2Time, argonConfig.Argon2Threads)
+
+	// PBKDF2 configuration
+	pbkdfConfig := auth.DefaultAuthConfig()
+	pbkdfConfig.HashMethod = "pbkdf2"
+	fmt.Printf("✓ PBKDF2 parameters: iterations=%d, key length=%d\n",
+		pbkdfConfig.PBKDF2Iterations, pbkdfConfig.PBKDF2KeyLength)
 }
