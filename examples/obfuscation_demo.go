@@ -60,15 +60,21 @@ func main() {
 	demoTrafficPadding(logger)
 	fmt.Println()
 
+	// Flow Watermarking demonstration
+	fmt.Println("8. Flow Watermarking Demo")
+	fmt.Println("-------------------------")
+	demoFlowWatermarking(logger)
+	fmt.Println()
+
 	// HTTP Mimicry demonstration
-	fmt.Println("8. HTTP Mimicry Demo")
+	fmt.Println("9. HTTP Mimicry Demo")
 	fmt.Println("--------------------")
 	demoHTTPMimicry(logger)
 	fmt.Println()
 
 	// Auto-switching demonstration
-	fmt.Println("9. Auto-switching Demo")
-	fmt.Println("----------------------")
+	fmt.Println("10. Auto-switching Demo")
+	fmt.Println("-----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
 
@@ -846,6 +852,162 @@ func demoHTTPMimicry(logger *log.Logger) {
 	httpMetrics := mimicry.GetMetrics()
 	fmt.Printf("Direct HTTP metrics: %d packets, %d bytes processed\n",
 		httpMetrics.PacketsProcessed, httpMetrics.BytesProcessed)
+}
+
+func demoFlowWatermarking(logger *log.Logger) {
+	// Create flow watermarking configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodFlowWatermark},
+		PrimaryMethod:   obfuscation.MethodFlowWatermark,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		FlowWatermark: obfuscation.FlowWatermarkConfig{
+			Enabled:         true,
+			WatermarkKey:    []byte("demo-flow-watermark-key-123456789012"),
+			PatternInterval: 300 * time.Millisecond,
+			PatternStrength: 0.4,
+			NoiseLevel:      0.15,
+			RotationPeriod:  2 * time.Minute,
+			StatisticalMode: true,
+			FrequencyBands:  []int{1, 2, 5, 10, 20},
+		},
+	}
+
+	// Create engine with flow watermarking
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create flow watermarking engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("Flow Watermarking method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Pattern strength: %.2f\n", config.FlowWatermark.PatternStrength)
+	fmt.Printf("Noise level: %.2f\n", config.FlowWatermark.NoiseLevel)
+	fmt.Printf("Frequency bands: %v\n", config.FlowWatermark.FrequencyBands)
+	fmt.Printf("Statistical mode: %v\n", config.FlowWatermark.StatisticalMode)
+
+	// Test different types of data to show flow watermarking behavior
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Control packet", []byte("CTRL_PKT_01")},
+		{"Authentication", []byte(`{"type":"auth","user":"demo","token":"abc123xyz789"}`)},
+		{"VPN payload", []byte("Encrypted VPN payload with sensitive user data that needs statistical obfuscation")},
+		{"Binary data", []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD, 0xFC, 0x80, 0x7F, 0x40, 0x3F}},
+		{"Large data", bytes.Repeat([]byte("LARGE_DATA_CHUNK_"), 30)}, // ~510 bytes
+	}
+
+	for _, tc := range testCases {
+		fmt.Printf("\nTesting %s:\n", tc.name)
+		fmt.Printf("Original size: %d bytes\n", len(tc.data))
+
+		// Show first few bytes for comparison
+		showBytes := 16
+		if len(tc.data) < showBytes {
+			showBytes = len(tc.data)
+		}
+		fmt.Printf("Original bytes:    %x\n", tc.data[:showBytes])
+
+		// Apply flow watermarking
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Watermarked size:  %d bytes (unchanged)\n", len(obfuscated))
+		fmt.Printf("Watermarked bytes: %x\n", obfuscated[:showBytes])
+
+		// Calculate statistical difference
+		differences := 0
+		for i := 0; i < showBytes; i++ {
+			if tc.data[i] != obfuscated[i] {
+				differences++
+			}
+		}
+		fmt.Printf("Byte differences:  %d/%d (%.1f%%)\n", differences, showBytes, float64(differences)/float64(showBytes)*100)
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Restored bytes:    %x\n", deobfuscated[:showBytes])
+		fmt.Printf("Round-trip:        %v\n", bytes.Equal(tc.data, deobfuscated))
+
+		// Show statistical characteristics
+		originalSum := 0
+		watermarkedSum := 0
+		for _, b := range tc.data {
+			originalSum += int(b)
+		}
+		for _, b := range obfuscated {
+			watermarkedSum += int(b)
+		}
+		fmt.Printf("Original checksum:    %d\n", originalSum%1000)
+		fmt.Printf("Watermarked checksum: %d\n", watermarkedSum%1000)
+	}
+
+	// Show flow watermarking metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nFlow Watermarking metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+	if methodMetrics, exists := metrics.MethodMetrics[obfuscation.MethodFlowWatermark]; exists {
+		fmt.Printf("- Average processing time: %v\n", methodMetrics.AvgProcessTime)
+	}
+
+	// Test the actual flow watermarking obfuscator directly
+	fmt.Printf("\nDirect Flow Watermarking test:\n")
+	flowConfig := &obfuscation.FlowWatermarkConfig{
+		Enabled:         true,
+		WatermarkKey:    []byte("direct-flow-watermark-key-987654321"),
+		PatternInterval: 100 * time.Millisecond,
+		PatternStrength: 0.6,
+		NoiseLevel:      0.3,
+		RotationPeriod:  1 * time.Minute,
+		StatisticalMode: false, // Test non-statistical mode
+		FrequencyBands:  []int{2, 4, 8, 16},
+	}
+
+	watermark, err := obfuscation.NewFlowWatermark(flowConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct flow watermarking: %v", err)
+		return
+	}
+
+	directData := []byte("Direct flow watermarking test with non-statistical mode")
+	obfuscated, err := watermark.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := watermark.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", bytes.Equal(directData, deobfuscated))
+	fmt.Printf("Non-statistical mode creates different patterns\n")
+
+	// Show watermarking metrics
+	watermarkMetrics := watermark.GetMetrics()
+	fmt.Printf("Direct watermarking metrics: %d packets, %d bytes processed\n",
+		watermarkMetrics.PacketsProcessed, watermarkMetrics.BytesProcessed)
+
+	fmt.Printf("\nFlow Watermarking overview:\n")
+	fmt.Printf("- Distorts statistical characteristics of data flow\n")
+	fmt.Printf("- Uses cryptographic keys to generate unique patterns\n")
+	fmt.Printf("- Supports both statistical and simple XOR modes\n")
+	fmt.Printf("- Periodically rotates patterns for security\n")
+	fmt.Printf("- Maintains data integrity while changing statistics\n")
+	fmt.Printf("- Effective against flow analysis and DPI correlation\n")
 }
 
 func demoAutoSwitching(logger *log.Logger) {

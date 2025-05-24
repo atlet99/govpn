@@ -23,6 +23,15 @@ The project is in active development (Phase 1). Key implemented features:
 - Modern cryptography with AES-GCM and ChaCha20-Poly1305
 - TLSv1.3 support with secure ciphers
 - Certificate management and PKI
+- **Advanced Traffic Obfuscation System** with multiple methods:
+  - TLS Tunneling for HTTPS-like traffic
+  - HTTP Mimicry for web request simulation
+  - Packet Padding for size randomization
+  - Timing Obfuscation for temporal pattern masking
+  - Traffic Padding for volume pattern masking
+  - **Flow Watermarking** for statistical characteristic distortion
+- Regional profiles optimized for different countries
+- DPI detection and automatic method switching
 - REST API for server management
 - Robust command-line interface
 

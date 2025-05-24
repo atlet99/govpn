@@ -31,6 +31,7 @@ const (
 	MethodPacketPadding  ObfuscationMethod = "packet_padding"
 	MethodTimingObfs     ObfuscationMethod = "timing_obfs"
 	MethodTrafficPadding ObfuscationMethod = "traffic_padding"
+	MethodFlowWatermark  ObfuscationMethod = "flow_watermark"
 	MethodHTTPStego      ObfuscationMethod = "http_stego"
 )
 
@@ -65,6 +66,7 @@ type Config struct {
 	PacketPadding     PacketPaddingConfig  `json:"packet_padding"`
 	TimingObfuscation TimingObfsConfig     `json:"timing_obfuscation"`
 	TrafficPadding    TrafficPaddingConfig `json:"traffic_padding"`
+	FlowWatermark     FlowWatermarkConfig  `json:"flow_watermark"`
 	TLSTunnel         TLSTunnelConfig      `json:"tls_tunnel"`
 	HTTPMimicry       HTTPMimicryConfig    `json:"http_mimicry"`
 	XORKey            []byte               `json:"xor_key,omitempty"`
@@ -93,6 +95,17 @@ type TrafficPaddingConfig struct {
 	BurstMode    bool          `json:"burst_mode"`
 	BurstSize    int           `json:"burst_size"`
 	AdaptiveMode bool          `json:"adaptive_mode"`
+}
+
+type FlowWatermarkConfig struct {
+	Enabled         bool          `json:"enabled"`
+	WatermarkKey    []byte        `json:"watermark_key,omitempty"`
+	PatternInterval time.Duration `json:"pattern_interval"`
+	PatternStrength float64       `json:"pattern_strength"`
+	NoiseLevel      float64       `json:"noise_level"`
+	RotationPeriod  time.Duration `json:"rotation_period"`
+	StatisticalMode bool          `json:"statistical_mode"`
+	FrequencyBands  []int         `json:"frequency_bands"`
 }
 
 type TLSTunnelConfig struct {
@@ -1611,6 +1624,355 @@ func (c *trafficPaddingConn) generateAndSendDummy() {
 	}
 }
 
+// FlowWatermark adds hidden watermarks to traffic flow to distort statistical characteristics
+type FlowWatermark struct {
+	config          *FlowWatermarkConfig
+	metrics         ObfuscatorMetrics
+	mu              sync.RWMutex
+	logger          *log.Logger
+	watermarkSeq    []byte
+	currentPattern  []float64
+	patternIndex    int
+	lastRotation    time.Time
+	rng             *mathrand.Rand
+	frequencyFilter map[int]float64
+}
+
+func NewFlowWatermark(config *FlowWatermarkConfig, logger *log.Logger) (Obfuscator, error) {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &FlowWatermarkConfig{
+			Enabled:         true,
+			WatermarkKey:    nil,
+			PatternInterval: 500 * time.Millisecond,
+			PatternStrength: 0.3,
+			NoiseLevel:      0.1,
+			RotationPeriod:  5 * time.Minute,
+			StatisticalMode: true,
+			FrequencyBands:  []int{1, 2, 5, 10, 20, 50},
+		}
+	}
+
+	// Set defaults if not configured
+	if config.PatternInterval <= 0 {
+		config.PatternInterval = 500 * time.Millisecond
+	}
+	if config.PatternStrength <= 0 || config.PatternStrength > 1.0 {
+		config.PatternStrength = 0.3
+	}
+	if config.NoiseLevel < 0 || config.NoiseLevel > 1.0 {
+		config.NoiseLevel = 0.1
+	}
+	if config.RotationPeriod <= 0 {
+		config.RotationPeriod = 5 * time.Minute
+	}
+	if len(config.FrequencyBands) == 0 {
+		config.FrequencyBands = []int{1, 2, 5, 10, 20, 50}
+	}
+
+	// Generate watermark key if not provided
+	if len(config.WatermarkKey) == 0 {
+		config.WatermarkKey = make([]byte, 32)
+		if _, err := rand.Read(config.WatermarkKey); err != nil {
+			return nil, fmt.Errorf("failed to generate watermark key: %w", err)
+		}
+	}
+
+	fw := &FlowWatermark{
+		config:          config,
+		logger:          logger,
+		lastRotation:    time.Now(),
+		rng:             mathrand.New(mathrand.NewSource(time.Now().UnixNano())),
+		frequencyFilter: make(map[int]float64),
+	}
+
+	// Initialize frequency filters
+	for _, band := range config.FrequencyBands {
+		fw.frequencyFilter[band] = fw.rng.Float64()
+	}
+
+	// Generate initial watermark sequence
+	fw.generateWatermarkSequence()
+	fw.generateWatermarkPattern()
+
+	return fw, nil
+}
+
+func (fw *FlowWatermark) Name() ObfuscationMethod {
+	return MethodFlowWatermark
+}
+
+func (fw *FlowWatermark) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		fw.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !fw.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Check if watermark pattern needs rotation
+	fw.checkPatternRotation()
+
+	// Apply flow watermarking - this modifies statistical characteristics
+	// without changing the actual data content significantly
+	watermarkedData := fw.applyWatermark(data)
+
+	return watermarkedData, nil
+}
+
+func (fw *FlowWatermark) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		fw.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !fw.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Remove watermark patterns to restore original data
+	originalData := fw.removeWatermark(data)
+
+	return originalData, nil
+}
+
+func (fw *FlowWatermark) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &flowWatermarkConn{
+		Conn:      conn,
+		watermark: fw,
+		flowState: make(map[string]interface{}),
+	}, nil
+}
+
+func (fw *FlowWatermark) IsAvailable() bool {
+	return fw.config.Enabled
+}
+
+func (fw *FlowWatermark) GetMetrics() ObfuscatorMetrics {
+	fw.mu.RLock()
+	defer fw.mu.RUnlock()
+	return fw.metrics
+}
+
+func (fw *FlowWatermark) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	fw.metrics.PacketsProcessed++
+	fw.metrics.BytesProcessed += int64(dataSize)
+	fw.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		fw.metrics.Errors++
+	}
+
+	// Update average processing time
+	if fw.metrics.AvgProcessTime == 0 {
+		fw.metrics.AvgProcessTime = processingTime
+	} else {
+		fw.metrics.AvgProcessTime = (fw.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// generateWatermarkSequence creates a unique watermark sequence based on the key
+func (fw *FlowWatermark) generateWatermarkSequence() {
+	// Use watermark key to seed deterministic sequence
+	keySum := int64(0)
+	for _, b := range fw.config.WatermarkKey {
+		keySum += int64(b)
+	}
+
+	seqRng := mathrand.New(mathrand.NewSource(keySum))
+	fw.watermarkSeq = make([]byte, 256)
+
+	for i := range fw.watermarkSeq {
+		fw.watermarkSeq[i] = byte(seqRng.Intn(256))
+	}
+}
+
+// generateWatermarkPattern creates statistical patterns for flow distortion
+func (fw *FlowWatermark) generateWatermarkPattern() {
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	patternLength := len(fw.config.FrequencyBands) * 8
+	fw.currentPattern = make([]float64, patternLength)
+
+	for i := range fw.currentPattern {
+		// Generate pattern based on frequency bands and watermark key
+		keyIndex := i % len(fw.config.WatermarkKey)
+		keyVal := float64(fw.config.WatermarkKey[keyIndex]) / 255.0
+
+		// Create pattern with key-based scaling
+		frequency := float64(fw.config.FrequencyBands[i%len(fw.config.FrequencyBands)])
+
+		pattern := fw.config.PatternStrength * (0.5 + 0.5*mathrand.Float64()*keyVal)
+		pattern *= (0.5 + 0.5*mathrand.Float64()*frequency/100.0)    // Frequency scaling
+		pattern += fw.config.NoiseLevel * (mathrand.Float64() - 0.5) // Add noise
+
+		fw.currentPattern[i] = pattern
+	}
+
+	fw.patternIndex = 0
+}
+
+// checkPatternRotation rotates watermark patterns periodically
+func (fw *FlowWatermark) checkPatternRotation() {
+	if time.Since(fw.lastRotation) > fw.config.RotationPeriod {
+		fw.logger.Printf("Rotating flow watermark pattern")
+		fw.generateWatermarkPattern()
+		fw.lastRotation = time.Now()
+
+		// Rotate frequency filters as well
+		for band := range fw.frequencyFilter {
+			fw.frequencyFilter[band] = fw.rng.Float64()
+		}
+	}
+}
+
+// applyWatermark applies statistical watermark to data
+func (fw *FlowWatermark) applyWatermark(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+
+	result := make([]byte, len(data))
+	copy(result, data)
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	// Apply watermark pattern to statistical characteristics
+	for i, b := range result {
+		if fw.config.StatisticalMode {
+			// Use deterministic pattern index based on data position and watermark key
+			// This ensures consistent obfuscation/deobfuscation
+			patternIdx := (i + int(fw.watermarkSeq[i%len(fw.watermarkSeq)])) % len(fw.currentPattern)
+			patternVal := fw.currentPattern[patternIdx]
+
+			// Calculate watermark adjustment
+			seqIdx := i % len(fw.watermarkSeq)
+			watermarkByte := fw.watermarkSeq[seqIdx]
+
+			// Apply subtle pattern-based modification
+			adjustment := int(patternVal * float64(watermarkByte) / 255.0 * 16)
+			adjustment -= 8 // Center around 0
+
+			// Apply adjustment with wrapping
+			newVal := int(b) + adjustment
+			if newVal < 0 {
+				newVal += 256
+			}
+			if newVal > 255 {
+				newVal -= 256
+			}
+
+			result[i] = byte(newVal)
+		} else {
+			// Apply simple XOR-based watermark
+			seqIdx := i % len(fw.watermarkSeq)
+			result[i] = b ^ fw.watermarkSeq[seqIdx]
+		}
+	}
+
+	return result
+}
+
+// removeWatermark removes statistical watermark from data
+func (fw *FlowWatermark) removeWatermark(data []byte) []byte {
+	if len(data) == 0 {
+		return data
+	}
+
+	result := make([]byte, len(data))
+	copy(result, data)
+
+	fw.mu.Lock()
+	defer fw.mu.Unlock()
+
+	// Remove watermark pattern (reverse operation)
+	for i, b := range result {
+		if fw.config.StatisticalMode {
+			// Use the same deterministic pattern index as in applyWatermark
+			patternIdx := (i + int(fw.watermarkSeq[i%len(fw.watermarkSeq)])) % len(fw.currentPattern)
+			patternVal := fw.currentPattern[patternIdx]
+
+			seqIdx := i % len(fw.watermarkSeq)
+			watermarkByte := fw.watermarkSeq[seqIdx]
+
+			// Reverse pattern-based modification
+			adjustment := int(patternVal * float64(watermarkByte) / 255.0 * 16)
+			adjustment -= 8 // Center around 0
+
+			// Reverse adjustment with wrapping
+			newVal := int(b) - adjustment
+			if newVal < 0 {
+				newVal += 256
+			}
+			if newVal > 255 {
+				newVal -= 256
+			}
+
+			result[i] = byte(newVal)
+		} else {
+			// Reverse simple XOR-based watermark
+			seqIdx := i % len(fw.watermarkSeq)
+			result[i] = b ^ fw.watermarkSeq[seqIdx]
+		}
+	}
+
+	return result
+}
+
+// flowWatermarkConn wraps a connection with flow watermarking capabilities
+type flowWatermarkConn struct {
+	net.Conn
+	watermark *FlowWatermark
+	flowState map[string]interface{}
+	mu        sync.Mutex
+}
+
+func (c *flowWatermarkConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	// Apply watermark removal to incoming data
+	deobfuscated, deobfErr := c.watermark.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *flowWatermarkConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	// Apply watermark to outgoing data
+	obfuscated, obfErr := c.watermark.Obfuscate(b)
+	if obfErr != nil {
+		return 0, obfErr
+	}
+
+	_, err = c.Conn.Write(obfuscated)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return the number of original bytes written
+	return len(b), nil
+}
+
 func NewHTTPSteganography(logger *log.Logger) (Obfuscator, error) {
 	return &stubObfuscator{name: MethodHTTPStego, logger: logger}, nil
 }
@@ -1696,6 +2058,8 @@ func (e *Engine) initializeObfuscators() error {
 			obfuscator, err = NewTimingObfuscation(&e.config.TimingObfuscation, e.logger)
 		case MethodTrafficPadding:
 			obfuscator, err = NewTrafficPadding(&e.config.TrafficPadding, e.logger)
+		case MethodFlowWatermark:
+			obfuscator, err = NewFlowWatermark(&e.config.FlowWatermark, e.logger)
 		case MethodHTTPStego:
 			obfuscator, err = NewHTTPSteganography(e.logger)
 		default:

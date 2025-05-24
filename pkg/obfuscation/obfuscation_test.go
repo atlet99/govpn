@@ -1377,3 +1377,225 @@ func BenchmarkTrafficPadding(b *testing.B) {
 		}
 	}
 }
+
+func TestFlowWatermark(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &FlowWatermarkConfig{
+		Enabled:         true,
+		WatermarkKey:    []byte("flow-watermark-test-key-123456789012"),
+		PatternInterval: 100 * time.Millisecond,
+		PatternStrength: 0.5,
+		NoiseLevel:      0.2,
+		RotationPeriod:  1 * time.Minute,
+		StatisticalMode: true,
+		FrequencyBands:  []int{1, 2, 5, 10},
+	}
+
+	watermark, err := NewFlowWatermark(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create flow watermark: %v", err)
+	}
+
+	if watermark.Name() != MethodFlowWatermark {
+		t.Errorf("Expected method name %s, got %s", MethodFlowWatermark, watermark.Name())
+	}
+
+	if !watermark.IsAvailable() {
+		t.Error("Flow watermark should be available")
+	}
+
+	// Test data obfuscation with flow watermarking
+	testData := []byte("Test packet data for flow watermarking obfuscation and statistical analysis resistance")
+
+	obfuscated, err := watermark.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Obfuscated data should be the same length but with modified statistical characteristics
+	if len(obfuscated) != len(testData) {
+		t.Errorf("Expected obfuscated data length %d, got %d", len(testData), len(obfuscated))
+	}
+
+	// Data should be modified (statistical watermarking changes the content)
+	if bytes.Equal(testData, obfuscated) {
+		t.Error("Flow watermarking should modify data statistical characteristics")
+	}
+
+	// Deobfuscation should restore original data
+	deobfuscated, err := watermark.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Flow watermark round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check metrics
+	metrics := watermark.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+
+	if metrics.BytesProcessed != int64(len(testData)*2) {
+		t.Errorf("Expected %d bytes processed, got %d", len(testData)*2, metrics.BytesProcessed)
+	}
+}
+
+func TestFlowWatermarkDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	watermark, err := NewFlowWatermark(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create flow watermark with default config: %v", err)
+	}
+
+	// Test functionality with defaults
+	testData := []byte("Default config test for flow watermarking")
+
+	obfuscated, err := watermark.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with defaults: %v", err)
+	}
+
+	deobfuscated, err := watermark.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with defaults: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Error("Flow watermarking with defaults round-trip failed")
+	}
+}
+
+func TestFlowWatermarkDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &FlowWatermarkConfig{
+		Enabled:         false,
+		WatermarkKey:    []byte("disabled-test-key"),
+		PatternInterval: 100 * time.Millisecond,
+		PatternStrength: 0.5,
+		NoiseLevel:      0.2,
+		RotationPeriod:  1 * time.Minute,
+		StatisticalMode: true,
+		FrequencyBands:  []int{1, 2, 5},
+	}
+
+	watermark, err := NewFlowWatermark(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled flow watermark: %v", err)
+	}
+
+	if watermark.IsAvailable() {
+		t.Error("Disabled flow watermark should not be available")
+	}
+
+	testData := []byte("Test with disabled flow watermarking")
+
+	// Should return data unchanged when disabled
+	obfuscated, err := watermark.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate when disabled: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Disabled flow watermarking should return data unchanged")
+	}
+}
+
+func TestEngineWithFlowWatermark(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodFlowWatermark},
+		PrimaryMethod:   MethodFlowWatermark,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		FlowWatermark: FlowWatermarkConfig{
+			Enabled:         true,
+			WatermarkKey:    []byte("engine-flow-watermark-test-key-12345"),
+			PatternInterval: 200 * time.Millisecond,
+			PatternStrength: 0.6,
+			NoiseLevel:      0.25,
+			RotationPeriod:  2 * time.Minute,
+			StatisticalMode: true,
+			FrequencyBands:  []int{1, 3, 7, 15},
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with flow watermark: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodFlowWatermark {
+		t.Errorf("Expected current method %s, got %s", MethodFlowWatermark, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Flow watermark engine test data with statistical characteristics")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	if bytes.Equal(testData, obfuscated) {
+		t.Error("Engine flow watermarking should modify data")
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine flow watermark round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkFlowWatermark(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &FlowWatermarkConfig{
+		Enabled:         true,
+		WatermarkKey:    []byte("benchmark-flow-watermark-key-123456789"),
+		PatternInterval: 100 * time.Millisecond,
+		PatternStrength: 0.3,
+		NoiseLevel:      0.1,
+		RotationPeriod:  5 * time.Minute,
+		StatisticalMode: true,
+		FrequencyBands:  []int{1, 2, 5, 10, 20},
+	}
+
+	watermark, err := NewFlowWatermark(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create flow watermark: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("Flow watermark bench "), 50) // ~1.05KB
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := watermark.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("Flow watermark obfuscation failed: %v", err)
+		}
+	}
+}
