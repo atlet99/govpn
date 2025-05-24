@@ -500,8 +500,193 @@ func NewHTTPMimicry(config *HTTPMimicryConfig, logger *log.Logger) (Obfuscator, 
 	return &stubObfuscator{name: MethodHTTPMimicry, logger: logger}, nil
 }
 
+// PacketPadding packet size randomization obfuscator
+type PacketPadding struct {
+	config  *PacketPaddingConfig
+	metrics ObfuscatorMetrics
+	mu      sync.RWMutex
+	logger  *log.Logger
+}
+
 func NewPacketPadding(config *PacketPaddingConfig, logger *log.Logger) (Obfuscator, error) {
-	return &stubObfuscator{name: MethodPacketPadding, logger: logger}, nil
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &PacketPaddingConfig{
+			Enabled:       true,
+			MinPadding:    1,
+			MaxPadding:    256,
+			RandomizeSize: true,
+		}
+	}
+
+	// Set defaults if not configured
+	if config.MinPadding <= 0 {
+		config.MinPadding = 1
+	}
+	if config.MaxPadding <= 0 {
+		config.MaxPadding = 256
+	}
+	if config.MinPadding > config.MaxPadding {
+		config.MinPadding, config.MaxPadding = config.MaxPadding, config.MinPadding
+	}
+
+	return &PacketPadding{
+		config: config,
+		logger: logger,
+	}, nil
+}
+
+func (p *PacketPadding) Name() ObfuscationMethod {
+	return MethodPacketPadding
+}
+
+func (p *PacketPadding) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		p.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !p.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Calculate padding size
+	paddingSize := p.config.MinPadding
+	if p.config.RandomizeSize && p.config.MaxPadding > p.config.MinPadding {
+		paddingRange := p.config.MaxPadding - p.config.MinPadding
+		paddingSize = p.config.MinPadding + mathrand.Intn(paddingRange+1)
+	}
+
+	// Create padded data
+	result := make([]byte, len(data)+paddingSize+4) // +4 for padding length header
+
+	// Write original data length (first 4 bytes)
+	result[0] = byte(len(data) >> 24)
+	result[1] = byte(len(data) >> 16)
+	result[2] = byte(len(data) >> 8)
+	result[3] = byte(len(data))
+
+	// Copy original data
+	copy(result[4:4+len(data)], data)
+
+	// Add random padding
+	if paddingSize > 0 {
+		_, err := rand.Read(result[4+len(data):])
+		if err != nil {
+			p.logger.Printf("Failed to generate random padding: %v", err)
+			// Fallback to zero padding
+			for i := 4 + len(data); i < len(result); i++ {
+				result[i] = 0
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func (p *PacketPadding) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		p.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !p.config.Enabled || len(data) < 4 {
+		return data, nil
+	}
+
+	// Read original data length from header
+	originalLength := int(data[0])<<24 | int(data[1])<<16 | int(data[2])<<8 | int(data[3])
+
+	// Validate length
+	if originalLength < 0 || originalLength > len(data)-4 {
+		return data, fmt.Errorf("invalid data length in packet padding header: %d", originalLength)
+	}
+
+	// Extract original data
+	result := make([]byte, originalLength)
+	copy(result, data[4:4+originalLength])
+
+	return result, nil
+}
+
+func (p *PacketPadding) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &packetPaddingConn{
+		Conn:    conn,
+		padding: p,
+	}, nil
+}
+
+func (p *PacketPadding) IsAvailable() bool {
+	return p.config.Enabled
+}
+
+func (p *PacketPadding) GetMetrics() ObfuscatorMetrics {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.metrics
+}
+
+func (p *PacketPadding) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.metrics.PacketsProcessed++
+	p.metrics.BytesProcessed += int64(dataSize)
+	p.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		p.metrics.Errors++
+	}
+
+	// Update average processing time
+	if p.metrics.AvgProcessTime == 0 {
+		p.metrics.AvgProcessTime = processingTime
+	} else {
+		p.metrics.AvgProcessTime = (p.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// packetPaddingConn wraps a connection with packet padding
+type packetPaddingConn struct {
+	net.Conn
+	padding *PacketPadding
+}
+
+func (c *packetPaddingConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	deobfuscated, deobfErr := c.padding.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *packetPaddingConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	obfuscated, obfErr := c.padding.Obfuscate(b)
+	if obfErr != nil {
+		return 0, obfErr
+	}
+
+	_, err = c.Conn.Write(obfuscated)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return the number of original bytes written
+	return len(b), nil
 }
 
 func NewTimingObfuscation(config *TimingObfsConfig, logger *log.Logger) (Obfuscator, error) {

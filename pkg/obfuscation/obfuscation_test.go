@@ -373,6 +373,174 @@ func BenchmarkXORObfuscation(b *testing.B) {
 	}
 }
 
+func TestPacketPadding(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &PacketPaddingConfig{
+		Enabled:       true,
+		MinPadding:    10,
+		MaxPadding:    50,
+		RandomizeSize: true,
+	}
+
+	padding, err := NewPacketPadding(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create packet padding: %v", err)
+	}
+
+	if padding.Name() != MethodPacketPadding {
+		t.Errorf("Expected method name %s, got %s", MethodPacketPadding, padding.Name())
+	}
+
+	if !padding.IsAvailable() {
+		t.Error("Packet padding should be available")
+	}
+
+	// Test data obfuscation with padding
+	testData := []byte("Test packet data for padding obfuscation")
+
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Obfuscated data should be larger due to padding
+	expectedMinSize := len(testData) + config.MinPadding + 4 // +4 for header
+	if len(obfuscated) < expectedMinSize {
+		t.Errorf("Expected obfuscated data size at least %d, got %d", expectedMinSize, len(obfuscated))
+	}
+
+	expectedMaxSize := len(testData) + config.MaxPadding + 4 // +4 for header
+	if len(obfuscated) > expectedMaxSize {
+		t.Errorf("Expected obfuscated data size at most %d, got %d", expectedMaxSize, len(obfuscated))
+	}
+
+	// Deobfuscation should restore original data
+	deobfuscated, err := padding.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Packet padding round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check metrics
+	metrics := padding.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+}
+
+func TestPacketPaddingDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	padding, err := NewPacketPadding(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create packet padding with default config: %v", err)
+	}
+
+	// Test that padding works with defaults
+	testData := []byte("Default config test")
+
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with default config: %v", err)
+	}
+
+	deobfuscated, err := padding.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with default config: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Default config round-trip failed")
+	}
+}
+
+func TestPacketPaddingDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &PacketPaddingConfig{
+		Enabled: false,
+	}
+
+	padding, err := NewPacketPadding(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled packet padding: %v", err)
+	}
+
+	if padding.IsAvailable() {
+		t.Error("Disabled packet padding should not be available")
+	}
+
+	testData := []byte("Test data for disabled padding")
+
+	// When disabled, should return data unchanged
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with disabled padding: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Disabled padding should return data unchanged")
+	}
+}
+
+func TestEngineWithPacketPadding(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodPacketPadding},
+		PrimaryMethod:   MethodPacketPadding,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		PacketPadding: PacketPaddingConfig{
+			Enabled:       true,
+			MinPadding:    5,
+			MaxPadding:    20,
+			RandomizeSize: true,
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with packet padding: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodPacketPadding {
+		t.Errorf("Expected current method %s, got %s", MethodPacketPadding, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Engine packet padding test")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine packet padding round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
 func BenchmarkTLSTunnelObfuscation(b *testing.B) {
 	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
 
@@ -396,6 +564,34 @@ func BenchmarkTLSTunnelObfuscation(b *testing.B) {
 		_, err := tunnel.Obfuscate(testData)
 		if err != nil {
 			b.Fatalf("TLS obfuscation failed: %v", err)
+		}
+	}
+}
+
+func BenchmarkPacketPaddingObfuscation(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &PacketPaddingConfig{
+		Enabled:       true,
+		MinPadding:    10,
+		MaxPadding:    50,
+		RandomizeSize: true,
+	}
+
+	padding, err := NewPacketPadding(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create packet padding: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("Packet padding bench "), 100) // ~2.1KB
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := padding.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("Packet padding obfuscation failed: %v", err)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -40,8 +41,14 @@ func main() {
 	demoTLSTunneling(logger)
 	fmt.Println()
 
+	// Packet Padding demonstration
+	fmt.Println("5. Packet Padding Demo")
+	fmt.Println("----------------------")
+	demoPacketPadding(logger)
+	fmt.Println()
+
 	// Auto-switching demonstration
-	fmt.Println("5. Auto-switching Demo")
+	fmt.Println("6. Auto-switching Demo")
 	fmt.Println("----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -274,23 +281,142 @@ func demoTLSTunneling(logger *log.Logger) {
 		tlsMetrics.PacketsProcessed, tlsMetrics.BytesProcessed)
 }
 
+func demoPacketPadding(logger *log.Logger) {
+	// Create packet padding configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodPacketPadding},
+		PrimaryMethod:   obfuscation.MethodPacketPadding,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		PacketPadding: obfuscation.PacketPaddingConfig{
+			Enabled:       true,
+			MinPadding:    10,
+			MaxPadding:    100,
+			RandomizeSize: true,
+		},
+	}
+
+	// Create engine with packet padding
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create packet padding engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("Packet Padding method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Min padding: %d bytes\n", config.PacketPadding.MinPadding)
+	fmt.Printf("Max padding: %d bytes\n", config.PacketPadding.MaxPadding)
+	fmt.Printf("Randomize size: %v\n", config.PacketPadding.RandomizeSize)
+
+	// Test different packet sizes to show padding effect
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Small packet", []byte("Hi")},
+		{"Medium packet", []byte("This is a medium-sized packet for testing")},
+		{"Large packet", []byte("This is a much larger packet that contains more data and should demonstrate how packet padding works with different sizes of input data.")},
+		{"Binary data", []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0xFF, 0xFE, 0xFD}},
+	}
+
+	for _, tc := range testCases {
+		fmt.Printf("\nTesting %s:\n", tc.name)
+		fmt.Printf("Original size: %d bytes\n", len(tc.data))
+
+		// Obfuscate with packet padding
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Padded size:   %d bytes (padding: %d bytes)\n",
+			len(obfuscated), len(obfuscated)-len(tc.data)-4) // -4 for header
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Restored size: %d bytes\n", len(deobfuscated))
+		fmt.Printf("Round-trip:    %v\n", bytes.Equal(tc.data, deobfuscated))
+
+		// Show size increase ratio
+		ratio := float64(len(obfuscated)) / float64(len(tc.data))
+		fmt.Printf("Size ratio:    %.2fx\n", ratio)
+	}
+
+	// Show packet padding metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nPacket Padding metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+
+	// Test the actual packet padding obfuscator directly
+	fmt.Printf("\nDirect Packet Padding test:\n")
+	paddingConfig := &obfuscation.PacketPaddingConfig{
+		Enabled:       true,
+		MinPadding:    5,
+		MaxPadding:    25,
+		RandomizeSize: true,
+	}
+
+	padding, err := obfuscation.NewPacketPadding(paddingConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct packet padding: %v", err)
+		return
+	}
+
+	directData := []byte("Direct packet padding test")
+	obfuscated, err := padding.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := padding.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", bytes.Equal(directData, deobfuscated))
+	fmt.Printf("Direct size increase: %d -> %d bytes\n", len(directData), len(obfuscated))
+
+	// Show packet padding metrics
+	paddingMetrics := padding.GetMetrics()
+	fmt.Printf("Direct padding metrics: %d packets, %d bytes processed\n",
+		paddingMetrics.PacketsProcessed, paddingMetrics.BytesProcessed)
+}
+
 func demoAutoSwitching(logger *log.Logger) {
 	// Configuration with auto-switching
 	config := &obfuscation.Config{
 		EnabledMethods: []obfuscation.ObfuscationMethod{
 			obfuscation.MethodXORCipher,
 			obfuscation.MethodTLSTunnel,
+			obfuscation.MethodPacketPadding,
 			obfuscation.MethodHTTPMimicry,
 		},
 		PrimaryMethod: obfuscation.MethodXORCipher,
 		FallbackMethods: []obfuscation.ObfuscationMethod{
 			obfuscation.MethodTLSTunnel,
+			obfuscation.MethodPacketPadding,
 			obfuscation.MethodHTTPMimicry,
 		},
 		AutoDetection:    true,
 		SwitchThreshold:  2,
 		DetectionTimeout: 3 * time.Second,
 		XORKey:           []byte("auto-switch-demo-key-123456789"),
+		PacketPadding: obfuscation.PacketPaddingConfig{
+			Enabled:       true,
+			MinPadding:    5,
+			MaxPadding:    50,
+			RandomizeSize: true,
+		},
 	}
 
 	engine, err := obfuscation.NewEngine(config, logger)
