@@ -70,6 +70,7 @@ type Config struct {
 	TLSTunnel         TLSTunnelConfig      `json:"tls_tunnel"`
 	HTTPMimicry       HTTPMimicryConfig    `json:"http_mimicry"`
 	DNSTunnel         DNSTunnelConfig      `json:"dns_tunnel"`
+	HTTPStego         HTTPStegoConfig      `json:"http_stego"`
 	XORKey            []byte               `json:"xor_key,omitempty"`
 }
 
@@ -2421,8 +2422,735 @@ func (c *flowWatermarkConn) Write(b []byte) (n int, err error) {
 	return len(b), nil
 }
 
-func NewHTTPSteganography(logger *log.Logger) (Obfuscator, error) {
-	return &stubObfuscator{name: MethodHTTPStego, logger: logger}, nil
+// HTTPSteganography hides VPN data within HTTP traffic using steganographic techniques
+type HTTPSteganography struct {
+	config     *HTTPStegoConfig
+	metrics    ObfuscatorMetrics
+	mu         sync.RWMutex
+	logger     *log.Logger
+	imagePool  [][]byte
+	scriptPool [][]byte
+	contentDB  map[string][]byte
+	sessionID  string
+	currentSeq uint32
+}
+
+type HTTPStegoConfig struct {
+	Enabled        bool              `json:"enabled"`
+	CoverWebsites  []string          `json:"cover_websites"`
+	UserAgents     []string          `json:"user_agents"`
+	ContentTypes   []string          `json:"content_types"`
+	CustomHeaders  map[string]string `json:"custom_headers"`
+	SteganoMethod  string            `json:"stegano_method"`
+	ChunkSize      int               `json:"chunk_size"`
+	ErrorRate      float64           `json:"error_rate"`
+	SessionTimeout time.Duration     `json:"session_timeout"`
+	EnableMIME     bool              `json:"enable_mime"`
+	CachingEnabled bool              `json:"caching_enabled"`
+}
+
+func NewHTTPSteganography(config *HTTPStegoConfig, logger *log.Logger) (Obfuscator, error) {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &HTTPStegoConfig{
+			Enabled: true,
+		}
+	}
+
+	stego := &HTTPSteganography{
+		config:    config,
+		logger:    logger,
+		contentDB: make(map[string][]byte),
+		sessionID: fmt.Sprintf("sess_%d", time.Now().Unix()),
+	}
+
+	// Set defaults
+	if len(stego.config.CoverWebsites) == 0 {
+		stego.config.CoverWebsites = []string{
+			"www.google.com",
+			"www.github.com",
+			"stackoverflow.com",
+			"www.reddit.com",
+			"news.ycombinator.com",
+			"www.wikipedia.org",
+		}
+	}
+
+	if len(stego.config.UserAgents) == 0 {
+		stego.config.UserAgents = []string{
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+		}
+	}
+
+	if len(stego.config.ContentTypes) == 0 {
+		stego.config.ContentTypes = []string{
+			"text/html",
+			"application/javascript",
+			"text/css",
+			"application/json",
+			"text/plain",
+			"image/png",
+			"image/jpeg",
+		}
+	}
+
+	if stego.config.SteganoMethod == "" {
+		stego.config.SteganoMethod = "headers_and_body"
+	}
+
+	if stego.config.ChunkSize <= 0 {
+		stego.config.ChunkSize = 1024
+	}
+
+	if stego.config.ErrorRate <= 0 {
+		stego.config.ErrorRate = 0.02 // 2% error rate for realism
+	}
+
+	if stego.config.SessionTimeout <= 0 {
+		stego.config.SessionTimeout = 30 * time.Minute
+	}
+
+	// Initialize cover content pools
+	stego.initializeCoverContent()
+
+	return stego, nil
+}
+
+func (h *HTTPSteganography) Name() ObfuscationMethod {
+	return MethodHTTPStego
+}
+
+func (h *HTTPSteganography) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		h.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !h.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Create steganographic HTTP traffic containing VPN data
+	return h.createSteganographicHTTP(data)
+}
+
+func (h *HTTPSteganography) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		h.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !h.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Extract VPN data from steganographic HTTP traffic
+	return h.extractFromSteganographicHTTP(data)
+}
+
+func (h *HTTPSteganography) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &httpSteganographyConn{
+		Conn:  conn,
+		stego: h,
+	}, nil
+}
+
+func (h *HTTPSteganography) IsAvailable() bool {
+	return h.config.Enabled
+}
+
+func (h *HTTPSteganography) GetMetrics() ObfuscatorMetrics {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.metrics
+}
+
+func (h *HTTPSteganography) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.metrics.PacketsProcessed++
+	h.metrics.BytesProcessed += int64(dataSize)
+	h.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		h.metrics.Errors++
+	}
+
+	if h.metrics.AvgProcessTime == 0 {
+		h.metrics.AvgProcessTime = processingTime
+	} else {
+		h.metrics.AvgProcessTime = (h.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// initializeCoverContent initializes pools of realistic cover content
+func (h *HTTPSteganography) initializeCoverContent() {
+	// Initialize image pool with realistic PNG/JPEG headers
+	h.imagePool = [][]byte{
+		// PNG header + some data
+		{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52},
+		// JPEG header + some data
+		{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48},
+	}
+
+	// Initialize script pool with realistic JavaScript/CSS fragments
+	h.scriptPool = [][]byte{
+		[]byte("function initApp(){document.addEventListener('DOMContentLoaded',function(){console.log('App initialized');});"),
+		[]byte("var config={apiUrl:'https://api.example.com',timeout:5000,retries:3};window.appConfig=config;"),
+		[]byte("body{margin:0;padding:20px;font-family:'Arial',sans-serif;background-color:#f5f5f5;}"),
+		[]byte(".container{max-width:1200px;margin:0 auto;padding:0 15px;box-sizing:border-box;}"),
+	}
+
+	// Initialize content database with realistic web content
+	h.contentDB["html_template"] = []byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading...</title>
+    <style>body{font-family:Arial,sans-serif;margin:40px;}</style>
+</head>
+<body>
+    <div id="content">
+        <h1>Content Loading</h1>
+        <p>Please wait while we load your content...</p>
+        <div class="loader" data-id="{{SESSION_ID}}">Loading...</div>
+    </div>
+    <script>
+        setTimeout(function(){
+            document.getElementById('content').innerHTML = '<h2>Content Ready</h2>';
+        }, {{DELAY}});
+    </script>
+</body>
+</html>`)
+
+	h.contentDB["json_template"] = []byte(`{
+	"status": "success",
+	"data": {
+		"session": "{{SESSION_ID}}",
+		"timestamp": {{TIMESTAMP}},
+		"payload": "{{PAYLOAD}}",
+		"metadata": {
+			"size": {{SIZE}},
+			"encoding": "base64",
+			"checksum": "{{CHECKSUM}}"
+		}
+	}
+}`)
+
+	h.contentDB["css_template"] = []byte(`/* Stylesheet v1.0 */
+.main-container {
+	width: 100%;
+	max-width: 1200px;
+	margin: 0 auto;
+	padding: 20px;
+	/* data: {{PAYLOAD}} */
+	box-sizing: border-box;
+}
+
+.header {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	/* session: {{SESSION_ID}} */
+	color: white;
+	padding: 30px 0;
+	text-align: center;
+	border-radius: 8px;
+}`)
+
+	h.contentDB["js_template"] = []byte(`// Application Module v2.1
+(function(window) {
+	'use strict';
+	
+	var app = {
+		version: '2.1.0',
+		session: '{{SESSION_ID}}',
+		config: {
+			// Embedded data: {{PAYLOAD}}
+			apiEndpoint: 'https://api.example.com/v1',
+			timeout: 5000,
+			retries: 3,
+			// checksum: {{CHECKSUM}}
+		},
+		
+		init: function() {
+			this.setupEventListeners();
+			this.loadData();
+		},
+		
+		loadData: function() {
+			// Data loading logic here
+			console.log('Data loaded for session:', this.session);
+		}
+	};
+	
+	window.App = app;
+})(window);`)
+}
+
+// createSteganographicHTTP creates HTTP traffic with hidden VPN data
+func (h *HTTPSteganography) createSteganographicHTTP(vpnData []byte) ([]byte, error) {
+	switch h.config.SteganoMethod {
+	case "headers_and_body":
+		return h.createHeadersAndBodyStego(vpnData)
+	case "multipart_forms":
+		return h.createMultipartFormStego(vpnData)
+	case "json_api":
+		return h.createJSONAPIStego(vpnData)
+	case "css_comments":
+		return h.createCSSCommentsStego(vpnData)
+	case "js_variables":
+		return h.createJSVariablesStego(vpnData)
+	default:
+		return h.createHeadersAndBodyStego(vpnData)
+	}
+}
+
+// extractFromSteganographicHTTP extracts VPN data from HTTP traffic
+func (h *HTTPSteganography) extractFromSteganographicHTTP(httpData []byte) ([]byte, error) {
+	switch h.config.SteganoMethod {
+	case "headers_and_body":
+		return h.extractFromHeadersAndBody(httpData)
+	case "multipart_forms":
+		return h.extractFromMultipartForm(httpData)
+	case "json_api":
+		return h.extractFromJSONAPI(httpData)
+	case "css_comments":
+		return h.extractFromCSSComments(httpData)
+	case "js_variables":
+		return h.extractFromJSVariables(httpData)
+	default:
+		return h.extractFromHeadersAndBody(httpData)
+	}
+}
+
+// createHeadersAndBodyStego embeds VPN data in HTTP headers and body
+func (h *HTTPSteganography) createHeadersAndBodyStego(vpnData []byte) ([]byte, error) {
+	// Encode VPN data as base64 for header embedding
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(vpnData)))
+	base64.StdEncoding.Encode(encoded, vpnData)
+
+	// Split encoded data into chunks for different headers
+	chunkSize := 64 // Max header value size
+	var headerChunks []string
+	for i := 0; i < len(encoded); i += chunkSize {
+		end := i + chunkSize
+		if end > len(encoded) {
+			end = len(encoded)
+		}
+		headerChunks = append(headerChunks, string(encoded[i:end]))
+	}
+
+	// Select random website and user agent
+	website := h.config.CoverWebsites[mathrand.Intn(len(h.config.CoverWebsites))]
+	userAgent := h.config.UserAgents[mathrand.Intn(len(h.config.UserAgents))]
+
+	// Create HTTP request with embedded data
+	var httpPacket strings.Builder
+	httpPacket.WriteString(fmt.Sprintf("GET /%s HTTP/1.1\r\n", h.generateRandomPath()))
+	httpPacket.WriteString(fmt.Sprintf("Host: %s\r\n", website))
+	httpPacket.WriteString(fmt.Sprintf("User-Agent: %s\r\n", userAgent))
+	httpPacket.WriteString("Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\n")
+	httpPacket.WriteString("Accept-Language: en-US,en;q=0.5\r\n")
+	httpPacket.WriteString("Accept-Encoding: gzip, deflate, br\r\n")
+	httpPacket.WriteString("Connection: keep-alive\r\n")
+	httpPacket.WriteString("Upgrade-Insecure-Requests: 1\r\n")
+
+	// Embed data chunks in custom headers
+	headerNames := []string{"X-Request-ID", "X-Trace-ID", "X-Session-Token", "X-Client-ID", "X-API-Key"}
+	for i, chunk := range headerChunks {
+		if i < len(headerNames) {
+			httpPacket.WriteString(fmt.Sprintf("%s: %s\r\n", headerNames[i], chunk))
+		} else {
+			// Use numbered headers for overflow
+			httpPacket.WriteString(fmt.Sprintf("X-Custom-%02d: %s\r\n", i-len(headerNames)+1, chunk))
+		}
+	}
+
+	// Add sequence number and checksum
+	h.mu.Lock()
+	h.currentSeq++
+	seq := h.currentSeq
+	h.mu.Unlock()
+
+	checksum := h.calculateChecksum(vpnData)
+	httpPacket.WriteString(fmt.Sprintf("X-Sequence: %d\r\n", seq))
+	httpPacket.WriteString(fmt.Sprintf("X-Checksum: %08x\r\n", checksum))
+	httpPacket.WriteString("\r\n")
+
+	return []byte(httpPacket.String()), nil
+}
+
+// extractFromHeadersAndBody extracts VPN data from HTTP headers and body
+func (h *HTTPSteganography) extractFromHeadersAndBody(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+	lines := strings.Split(dataStr, "\r\n")
+
+	var encodedChunks []string
+	var sequence uint32
+	var expectedChecksum uint32
+
+	// Parse headers to extract embedded data
+	for _, line := range lines {
+		if strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			headerName := strings.TrimSpace(parts[0])
+			headerValue := strings.TrimSpace(parts[1])
+
+			switch {
+			case headerName == "X-Request-ID" || headerName == "X-Trace-ID" ||
+				headerName == "X-Session-Token" || headerName == "X-Client-ID" ||
+				headerName == "X-API-Key" || strings.HasPrefix(headerName, "X-Custom-"):
+				encodedChunks = append(encodedChunks, headerValue)
+			case headerName == "X-Sequence":
+				_, _ = fmt.Sscanf(headerValue, "%d", &sequence)
+			case headerName == "X-Checksum":
+				_, _ = fmt.Sscanf(headerValue, "%x", &expectedChecksum)
+			}
+		}
+	}
+
+	if len(encodedChunks) == 0 {
+		return []byte{}, fmt.Errorf("no embedded data found in headers")
+	}
+
+	// Reconstruct encoded data
+	encoded := strings.Join(encodedChunks, "")
+
+	// Decode from base64
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode embedded data: %w", err)
+	}
+
+	// Verify checksum if available
+	if expectedChecksum != 0 {
+		actualChecksum := h.calculateChecksum(decoded)
+		if actualChecksum != expectedChecksum {
+			h.logger.Printf("Warning: checksum mismatch (expected: %08x, actual: %08x)", expectedChecksum, actualChecksum)
+		}
+	}
+
+	return decoded, nil
+}
+
+// createMultipartFormStego embeds VPN data in multipart form data
+func (h *HTTPSteganography) createMultipartFormStego(vpnData []byte) ([]byte, error) {
+	boundary := fmt.Sprintf("----WebKitFormBoundary%016x", mathrand.Int63())
+
+	var formData strings.Builder
+	formData.WriteString("POST /api/upload HTTP/1.1\r\n")
+	formData.WriteString("Host: " + h.config.CoverWebsites[mathrand.Intn(len(h.config.CoverWebsites))] + "\r\n")
+	formData.WriteString("User-Agent: " + h.config.UserAgents[mathrand.Intn(len(h.config.UserAgents))] + "\r\n")
+	formData.WriteString(fmt.Sprintf("Content-Type: multipart/form-data; boundary=%s\r\n", boundary))
+
+	// Calculate content length later
+	bodyBuilder := strings.Builder{}
+
+	// Add normal form fields
+	bodyBuilder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	bodyBuilder.WriteString("Content-Disposition: form-data; name=\"username\"\r\n\r\n")
+	bodyBuilder.WriteString("user_" + fmt.Sprintf("%d", mathrand.Int63()) + "\r\n")
+
+	bodyBuilder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	bodyBuilder.WriteString("Content-Disposition: form-data; name=\"description\"\r\n\r\n")
+	bodyBuilder.WriteString("File upload description\r\n")
+
+	// Add file with embedded VPN data
+	bodyBuilder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	bodyBuilder.WriteString("Content-Disposition: form-data; name=\"file\"; filename=\"data.txt\"\r\n")
+	bodyBuilder.WriteString("Content-Type: text/plain\r\n\r\n")
+
+	// Encode VPN data and mix with dummy content
+	encoded := base64.StdEncoding.EncodeToString(vpnData)
+	bodyBuilder.WriteString("# Configuration file\r\n")
+	bodyBuilder.WriteString("# Session: " + h.sessionID + "\r\n")
+	bodyBuilder.WriteString("data=" + encoded + "\r\n")
+	bodyBuilder.WriteString("# End of configuration\r\n")
+
+	bodyBuilder.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+
+	body := bodyBuilder.String()
+	formData.WriteString(fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body)))
+	formData.WriteString(body)
+
+	return []byte(formData.String()), nil
+}
+
+// extractFromMultipartForm extracts VPN data from multipart form data
+func (h *HTTPSteganography) extractFromMultipartForm(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+
+	// Find the data field in the form
+	start := strings.Index(dataStr, "data=")
+	if start == -1 {
+		return []byte{}, fmt.Errorf("no data field found in form")
+	}
+
+	start += 5 // Skip "data="
+	end := strings.Index(dataStr[start:], "\r\n")
+	if end == -1 {
+		end = len(dataStr) - start
+	}
+
+	encoded := dataStr[start : start+end]
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode form data: %w", err)
+	}
+
+	return decoded, nil
+}
+
+// createJSONAPIStego embeds VPN data in JSON API responses
+func (h *HTTPSteganography) createJSONAPIStego(vpnData []byte) ([]byte, error) {
+	template := string(h.contentDB["json_template"])
+
+	// Encode VPN data
+	encoded := base64.StdEncoding.EncodeToString(vpnData)
+	checksum := fmt.Sprintf("%08x", h.calculateChecksum(vpnData))
+
+	// Replace template variables
+	template = strings.ReplaceAll(template, "{{SESSION_ID}}", h.sessionID)
+	template = strings.ReplaceAll(template, "{{TIMESTAMP}}", fmt.Sprintf("%d", time.Now().Unix()))
+	template = strings.ReplaceAll(template, "{{PAYLOAD}}", encoded)
+	template = strings.ReplaceAll(template, "{{SIZE}}", fmt.Sprintf("%d", len(vpnData)))
+	template = strings.ReplaceAll(template, "{{CHECKSUM}}", checksum)
+
+	// Create HTTP response
+	var response strings.Builder
+	response.WriteString("HTTP/1.1 200 OK\r\n")
+	response.WriteString("Server: nginx/1.20.2\r\n")
+	response.WriteString("Content-Type: application/json\r\n")
+	response.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(template)))
+	response.WriteString("Cache-Control: no-cache\r\n")
+	response.WriteString("Connection: keep-alive\r\n")
+	response.WriteString("\r\n")
+	response.WriteString(template)
+
+	return []byte(response.String()), nil
+}
+
+// extractFromJSONAPI extracts VPN data from JSON API responses
+func (h *HTTPSteganography) extractFromJSONAPI(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+
+	// Find JSON body
+	bodyStart := strings.Index(dataStr, "\r\n\r\n")
+	if bodyStart == -1 {
+		return []byte{}, fmt.Errorf("no JSON body found")
+	}
+
+	jsonBody := dataStr[bodyStart+4:]
+
+	// Extract payload from JSON (simple string search)
+	payloadStart := strings.Index(jsonBody, `"payload": "`)
+	if payloadStart == -1 {
+		return []byte{}, fmt.Errorf("no payload found in JSON")
+	}
+
+	payloadStart += 12 // Skip `"payload": "`
+	payloadEnd := strings.Index(jsonBody[payloadStart:], `"`)
+	if payloadEnd == -1 {
+		return []byte{}, fmt.Errorf("malformed payload in JSON")
+	}
+
+	encoded := jsonBody[payloadStart : payloadStart+payloadEnd]
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JSON payload: %w", err)
+	}
+
+	return decoded, nil
+}
+
+// createCSSCommentsStego embeds VPN data in CSS comments
+func (h *HTTPSteganography) createCSSCommentsStego(vpnData []byte) ([]byte, error) {
+	template := string(h.contentDB["css_template"])
+
+	// Encode VPN data
+	encoded := base64.StdEncoding.EncodeToString(vpnData)
+
+	// Replace template variables
+	template = strings.ReplaceAll(template, "{{SESSION_ID}}", h.sessionID)
+	template = strings.ReplaceAll(template, "{{PAYLOAD}}", encoded)
+
+	// Create HTTP response
+	var response strings.Builder
+	response.WriteString("HTTP/1.1 200 OK\r\n")
+	response.WriteString("Content-Type: text/css\r\n")
+	response.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(template)))
+	response.WriteString("Cache-Control: public, max-age=3600\r\n")
+	response.WriteString("\r\n")
+	response.WriteString(template)
+
+	return []byte(response.String()), nil
+}
+
+// extractFromCSSComments extracts VPN data from CSS comments
+func (h *HTTPSteganography) extractFromCSSComments(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+
+	// Find CSS body
+	bodyStart := strings.Index(dataStr, "\r\n\r\n")
+	if bodyStart == -1 {
+		return []byte{}, fmt.Errorf("no CSS body found")
+	}
+
+	cssBody := dataStr[bodyStart+4:]
+
+	// Extract data from comment
+	dataStart := strings.Index(cssBody, "/* data: ")
+	if dataStart == -1 {
+		return []byte{}, fmt.Errorf("no data comment found in CSS")
+	}
+
+	dataStart += 9 // Skip "/* data: "
+	dataEnd := strings.Index(cssBody[dataStart:], " */")
+	if dataEnd == -1 {
+		return []byte{}, fmt.Errorf("malformed data comment in CSS")
+	}
+
+	encoded := cssBody[dataStart : dataStart+dataEnd]
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode CSS data: %w", err)
+	}
+
+	return decoded, nil
+}
+
+// createJSVariablesStego embeds VPN data in JavaScript variables
+func (h *HTTPSteganography) createJSVariablesStego(vpnData []byte) ([]byte, error) {
+	template := string(h.contentDB["js_template"])
+
+	// Encode VPN data
+	encoded := base64.StdEncoding.EncodeToString(vpnData)
+	checksum := fmt.Sprintf("%08x", h.calculateChecksum(vpnData))
+
+	// Replace template variables
+	template = strings.ReplaceAll(template, "{{SESSION_ID}}", h.sessionID)
+	template = strings.ReplaceAll(template, "{{PAYLOAD}}", encoded)
+	template = strings.ReplaceAll(template, "{{CHECKSUM}}", checksum)
+
+	// Create HTTP response
+	var response strings.Builder
+	response.WriteString("HTTP/1.1 200 OK\r\n")
+	response.WriteString("Content-Type: application/javascript\r\n")
+	response.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(template)))
+	response.WriteString("Cache-Control: public, max-age=3600\r\n")
+	response.WriteString("\r\n")
+	response.WriteString(template)
+
+	return []byte(response.String()), nil
+}
+
+// extractFromJSVariables extracts VPN data from JavaScript variables
+func (h *HTTPSteganography) extractFromJSVariables(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+
+	// Find JS body
+	bodyStart := strings.Index(dataStr, "\r\n\r\n")
+	if bodyStart == -1 {
+		return []byte{}, fmt.Errorf("no JS body found")
+	}
+
+	jsBody := dataStr[bodyStart+4:]
+
+	// Extract data from comment
+	dataStart := strings.Index(jsBody, "// Embedded data: ")
+	if dataStart == -1 {
+		return []byte{}, fmt.Errorf("no embedded data found in JS")
+	}
+
+	dataStart += 18 // Skip "// Embedded data: "
+	dataEnd := strings.Index(jsBody[dataStart:], "\n")
+	if dataEnd == -1 {
+		dataEnd = len(jsBody) - dataStart
+	}
+
+	encoded := strings.TrimSpace(jsBody[dataStart : dataStart+dataEnd])
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JS data: %w", err)
+	}
+
+	return decoded, nil
+}
+
+// generateRandomPath generates a realistic HTTP path
+func (h *HTTPSteganography) generateRandomPath() string {
+	paths := []string{
+		"api/v1/data",
+		"content/page.html",
+		"assets/style.css",
+		"scripts/app.js",
+		"images/banner.jpg",
+		"search?q=query",
+		"user/profile",
+		"dashboard",
+		"settings/preferences",
+		"help/documentation",
+	}
+	return paths[mathrand.Intn(len(paths))]
+}
+
+// calculateChecksum calculates a simple checksum for data integrity
+func (h *HTTPSteganography) calculateChecksum(data []byte) uint32 {
+	var checksum uint32
+	for _, b := range data {
+		checksum = checksum*31 + uint32(b)
+	}
+	return checksum
+}
+
+// httpSteganographyConn wraps a connection with HTTP steganography
+type httpSteganographyConn struct {
+	net.Conn
+	stego *HTTPSteganography
+}
+
+func (c *httpSteganographyConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	deobfuscated, deobfErr := c.stego.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *httpSteganographyConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	obfuscated, obfErr := c.stego.Obfuscate(b)
+	if obfErr != nil {
+		return 0, obfErr
+	}
+
+	_, err = c.Conn.Write(obfuscated)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return the number of original bytes written
+	return len(b), nil
+}
+
+func NewHTTPSteganographyWithDefaults(logger *log.Logger) (Obfuscator, error) {
+	return NewHTTPSteganography(nil, logger)
 }
 
 // Engine main obfuscation engine
@@ -2511,7 +3239,7 @@ func (e *Engine) initializeObfuscators() error {
 		case MethodFlowWatermark:
 			obfuscator, err = NewFlowWatermark(&e.config.FlowWatermark, e.logger)
 		case MethodHTTPStego:
-			obfuscator, err = NewHTTPSteganography(e.logger)
+			obfuscator, err = NewHTTPSteganography(&e.config.HTTPStego, e.logger)
 		default:
 			e.logger.Printf("Warning: unsupported obfuscation method: %s", method)
 			continue

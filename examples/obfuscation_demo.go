@@ -78,8 +78,14 @@ func main() {
 	demoDNSTunneling(logger)
 	fmt.Println()
 
+	// HTTP Steganography demonstration
+	fmt.Println("11. HTTP Steganography Demo")
+	fmt.Println("---------------------------")
+	demoHTTPSteganography(logger)
+	fmt.Println()
+
 	// Auto-switching demonstration
-	fmt.Println("11. Auto-switching Demo")
+	fmt.Println("12. Auto-switching Demo")
 	fmt.Println("-----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -995,6 +1001,166 @@ func demoDNSTunneling(logger *log.Logger) {
 	fmt.Printf("- Configurable query delays to avoid detection\n")
 	fmt.Printf("- Higher latency but excellent bypass capabilities\n")
 	fmt.Printf("- Ideal for emergency backup communication\n")
+}
+
+func demoHTTPSteganography(logger *log.Logger) {
+	// Create HTTP steganography configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodHTTPStego},
+		PrimaryMethod:   obfuscation.MethodHTTPStego,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		HTTPStego: obfuscation.HTTPStegoConfig{
+			Enabled:        true,
+			CoverWebsites:  []string{"github.com", "stackoverflow.com", "reddit.com"},
+			UserAgents:     []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+			ContentTypes:   []string{"text/html", "application/json", "text/css", "application/javascript"},
+			SteganoMethod:  "headers_and_body",
+			ChunkSize:      64,
+			ErrorRate:      0.02,
+			SessionTimeout: 15 * time.Minute,
+			EnableMIME:     true,
+			CachingEnabled: false,
+		},
+	}
+
+	// Create engine with HTTP steganography
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP steganography engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("HTTP Steganography method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Cover websites: %v\n", config.HTTPStego.CoverWebsites)
+	fmt.Printf("Content types: %v\n", config.HTTPStego.ContentTypes)
+	fmt.Printf("Steganographic method: %s\n", config.HTTPStego.SteganoMethod)
+	fmt.Printf("Chunk size: %d bytes\n", config.HTTPStego.ChunkSize)
+
+	// Test different steganographic methods
+	steganographicMethods := []string{
+		"headers_and_body",
+		"multipart_forms",
+		"json_api",
+		"css_comments",
+		"js_variables",
+	}
+
+	testData := []byte("Confidential VPN data hidden using HTTP steganography techniques")
+
+	for i, method := range steganographicMethods {
+		fmt.Printf("\n%d. Testing %s method:\n", i+1, method)
+
+		// Update method in config
+		config.HTTPStego.SteganoMethod = method
+
+		// Create new engine with updated config
+		methodEngine, err := obfuscation.NewEngine(config, logger)
+		if err != nil {
+			log.Printf("Failed to create engine for method %s: %v", method, err)
+			continue
+		}
+
+		fmt.Printf("Original data: %s\n", string(testData))
+		fmt.Printf("Original size: %d bytes\n", len(testData))
+
+		// Apply HTTP steganography
+		obfuscated, err := methodEngine.ObfuscateData(testData)
+		if err != nil {
+			log.Printf("Failed to obfuscate with method %s: %v", method, err)
+			methodEngine.Close()
+			continue
+		}
+
+		fmt.Printf("Steganographic size: %d bytes (%.1fx expansion)\n",
+			len(obfuscated), float64(len(obfuscated))/float64(len(testData)))
+
+		// Show HTTP structure preview
+		obfuscatedStr := string(obfuscated)
+		lines := strings.Split(obfuscatedStr, "\r\n")
+		fmt.Printf("HTTP structure preview:\n")
+		for j, line := range lines {
+			if j >= 8 || line == "" { // Show first 8 lines or until empty line
+				if line == "" {
+					fmt.Printf("  [HTTP body follows...]\n")
+				}
+				break
+			}
+			if len(line) > 80 {
+				fmt.Printf("  %s...\n", line[:80])
+			} else {
+				fmt.Printf("  %s\n", line)
+			}
+		}
+
+		// Deobfuscate
+		deobfuscated, err := methodEngine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate with method %s: %v", method, err)
+			methodEngine.Close()
+			continue
+		}
+
+		fmt.Printf("Extracted data: %s\n", string(deobfuscated))
+		fmt.Printf("Round-trip success: %v\n", bytes.Equal(testData, deobfuscated))
+
+		methodEngine.Close()
+	}
+
+	// Show HTTP steganography metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nHTTP Steganography metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	if methodMetrics, exists := metrics.MethodMetrics[obfuscation.MethodHTTPStego]; exists {
+		fmt.Printf("- Average processing time: %v\n", methodMetrics.AvgProcessTime)
+	}
+
+	// Test different data types
+	fmt.Printf("\nTesting different data types:\n")
+	dataTypes := []struct {
+		name string
+		data []byte
+	}{
+		{"JSON API call", []byte(`{"action":"authenticate","user":"alice","token":"secret123"}`)},
+		{"Binary config", []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52}},
+		{"Large payload", bytes.Repeat([]byte("STEGANOGRAPHIC_DATA_"), 25)}, // ~500 bytes
+		{"Control command", []byte("CONNECT_VPN_SERVER_192_168_1_1")},
+	}
+
+	for _, dt := range dataTypes {
+		fmt.Printf("\nTesting %s:\n", dt.name)
+		fmt.Printf("Size: %d bytes\n", len(dt.data))
+
+		obfuscated, err := engine.ObfuscateData(dt.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", dt.name, err)
+			continue
+		}
+
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", dt.name, err)
+			continue
+		}
+
+		fmt.Printf("Steganographic HTTP size: %d bytes\n", len(obfuscated))
+		fmt.Printf("Data integrity: %v\n", bytes.Equal(dt.data, deobfuscated))
+
+		expansion := float64(len(obfuscated)) / float64(len(dt.data))
+		fmt.Printf("Size expansion: %.1fx\n", expansion)
+	}
+
+	fmt.Printf("\nHTTP Steganography overview:\n")
+	fmt.Printf("- Hides VPN data within legitimate HTTP traffic\n")
+	fmt.Printf("- Multiple embedding methods for different scenarios\n")
+	fmt.Printf("- Headers and body: Fast, good for small data\n")
+	fmt.Printf("- Multipart forms: Excellent cover for file uploads\n")
+	fmt.Printf("- JSON API: Perfect for web application traffic\n")
+	fmt.Printf("- CSS/JS comments: Stealthy for web resources\n")
+	fmt.Printf("- Realistic HTTP structure with proper headers\n")
+	fmt.Printf("- Configurable websites and user agents for authenticity\n")
+	fmt.Printf("- Automatic checksum verification for data integrity\n")
 }
 
 func demoFlowWatermarking(logger *log.Logger) {

@@ -2,6 +2,7 @@ package obfuscation
 
 import (
 	"bytes"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -1841,6 +1842,219 @@ func BenchmarkFlowWatermark(b *testing.B) {
 		_, err := watermark.Obfuscate(testData)
 		if err != nil {
 			b.Fatalf("Flow watermark obfuscation failed: %v", err)
+		}
+	}
+}
+
+func TestHTTPSteganography(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &HTTPStegoConfig{
+		Enabled:        true,
+		CoverWebsites:  []string{"example.com", "test.com"},
+		UserAgents:     []string{"TestAgent/1.0"},
+		ContentTypes:   []string{"text/html", "application/json"},
+		SteganoMethod:  "headers_and_body",
+		ChunkSize:      64,
+		ErrorRate:      0.01,
+		SessionTimeout: 10 * time.Minute,
+		EnableMIME:     true,
+		CachingEnabled: false,
+	}
+
+	stego, err := NewHTTPSteganography(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP steganography: %v", err)
+	}
+
+	if stego.Name() != MethodHTTPStego {
+		t.Errorf("Expected method name %s, got %s", MethodHTTPStego, stego.Name())
+	}
+
+	if !stego.IsAvailable() {
+		t.Error("HTTP steganography should be available")
+	}
+
+	// Test different steganographic methods
+	testMethods := []string{
+		"headers_and_body",
+		"multipart_forms",
+		"json_api",
+		"css_comments",
+		"js_variables",
+	}
+
+	for _, method := range testMethods {
+		t.Run(method, func(t *testing.T) {
+			testHTTPStegoMethod(t, stego, method)
+		})
+	}
+}
+
+func testHTTPStegoMethod(t *testing.T, stego Obfuscator, method string) {
+	// Update steganography method
+	if httpStego, ok := stego.(*HTTPSteganography); ok {
+		httpStego.config.SteganoMethod = method
+	}
+
+	testData := []byte("HTTP steganography test data for method: " + method)
+
+	// Test obfuscation
+	obfuscated, err := stego.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with method %s: %v", method, err)
+	}
+
+	if len(obfuscated) == 0 {
+		t.Fatalf("Obfuscated data is empty for method %s", method)
+	}
+
+	// Test deobfuscation
+	deobfuscated, err := stego.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with method %s: %v", method, err)
+	}
+
+	// Verify data integrity
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Data mismatch for method %s: expected %s, got %s",
+			method, string(testData), string(deobfuscated))
+	}
+
+	// Verify that obfuscated data looks like legitimate HTTP traffic
+	obfuscatedStr := string(obfuscated)
+	if !strings.Contains(obfuscatedStr, "HTTP/1.1") && !strings.Contains(obfuscatedStr, "GET /") && !strings.Contains(obfuscatedStr, "POST /") {
+		t.Errorf("Obfuscated data doesn't look like HTTP traffic for method %s", method)
+	}
+
+	t.Logf("Method %s: %d bytes -> %d bytes (%.1fx expansion)",
+		method, len(testData), len(obfuscated), float64(len(obfuscated))/float64(len(testData)))
+}
+
+func TestHTTPSteganographyDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	stego, err := NewHTTPSteganography(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP steganography with default config: %v", err)
+	}
+
+	if !stego.IsAvailable() {
+		t.Error("HTTP steganography should be available with default config")
+	}
+
+	testData := []byte("Default config test")
+	obfuscated, err := stego.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with default config: %v", err)
+	}
+
+	deobfuscated, err := stego.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with default config: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Data mismatch with default config")
+	}
+}
+
+func TestHTTPSteganographyDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &HTTPStegoConfig{Enabled: false}
+	stego, err := NewHTTPSteganography(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled HTTP steganography: %v", err)
+	}
+
+	testData := []byte("Should pass through unchanged")
+	obfuscated, err := stego.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to process disabled steganography: %v", err)
+	}
+
+	// When disabled, data should pass through unchanged
+	if !bytes.Equal(testData, obfuscated) {
+		t.Errorf("Disabled steganography should pass data unchanged")
+	}
+}
+
+func TestEngineWithHTTPSteganography(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodHTTPStego},
+		PrimaryMethod:   MethodHTTPStego,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		HTTPStego: HTTPStegoConfig{
+			Enabled:       true,
+			SteganoMethod: "json_api",
+			ChunkSize:     128,
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with HTTP steganography: %v", err)
+	}
+	defer engine.Close()
+
+	if engine.GetCurrentMethod() != MethodHTTPStego {
+		t.Errorf("Expected current method %s, got %s", MethodHTTPStego, engine.GetCurrentMethod())
+	}
+
+	testData := []byte("Engine test data for HTTP steganography")
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate through engine: %v", err)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine data mismatch")
+	}
+
+	// Check metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets < 2 {
+		t.Errorf("Expected at least 2 packets processed, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkHTTPSteganographyObfuscation(b *testing.B) {
+	logger := log.New(io.Discard, "", 0)
+
+	config := &HTTPStegoConfig{
+		Enabled:       true,
+		SteganoMethod: "headers_and_body",
+		ChunkSize:     64,
+	}
+
+	stego, err := NewHTTPSteganography(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create HTTP steganography: %v", err)
+	}
+
+	data := []byte("Benchmark test data for HTTP steganography performance measurement")
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		obfuscated, err := stego.Obfuscate(data)
+		if err != nil {
+			b.Fatalf("Obfuscation failed: %v", err)
+		}
+
+		_, err = stego.Deobfuscate(obfuscated)
+		if err != nil {
+			b.Fatalf("Deobfuscation failed: %v", err)
 		}
 	}
 }

@@ -20,9 +20,7 @@
 - **Адаптивная обфускация** - динамическое переключение при обнаружении блокировки
 
 - **DNS Tunneling** - передача данных через DNS запросы (резервный канал связи)
-
-### 🚧 В разработке
-- **HTTP Steganography** - сокрытие VPN данных в HTTP запросах/ответах
+- **HTTP Steganography** ✅ - скрытие VPN данных внутри HTTP трафика с использованием стеганографических техник
 
 ## Быстрый старт
 
@@ -285,6 +283,40 @@ tunnel, err := obfuscation.NewDNSTunnel(config, logger)
 
 **Документация:** [DNS Tunneling](dns_tunneling.md)
 
+### HTTP Steganography ✅
+
+Скрытие VPN данных внутри обычного HTTP трафика с использованием стеганографических техник.
+
+**Преимущества:**
+- Пять различных методов стеганографии для разных сценариев
+- Headers and Body: быстрый для небольших данных (7.5x расширение)
+- Multipart Forms: отличная маскировка под загрузку файлов (13.5x расширение)
+- JSON API: неотличим от API трафика (6.8x расширение)
+- CSS Comments: стеганографически стойкий (9.5x расширение)
+- JavaScript Variables: скрытность в коде приложения (13.1x расширение)
+- Реалистичные HTTP заголовки и структуры
+- Автоматическая проверка целостности данных
+- Настраиваемые веб-сайты и User-Agent для аутентичности
+
+**Использование:**
+```go
+config := &obfuscation.HTTPStegoConfig{
+    Enabled:       true,
+    CoverWebsites: []string{"github.com", "stackoverflow.com", "reddit.com"},
+    UserAgents:    []string{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+    ContentTypes:  []string{"text/html", "application/json", "text/css"},
+    SteganoMethod: "json_api",  // headers_and_body, multipart_forms, json_api, css_comments, js_variables
+    ChunkSize:     128,
+    ErrorRate:     0.02,
+    SessionTimeout: 15 * time.Minute,
+    EnableMIME:     true,
+    CachingEnabled: false,
+}
+stego, err := obfuscation.NewHTTPSteganography(config, logger)
+```
+
+**Документация:** [HTTP Steganography](http_steganography.md)
+
 ## Региональные профили
 
 ### Китай (china)
@@ -365,6 +397,7 @@ BenchmarkPacketPaddingObfuscation-12 2720599       439.5 ns/op  2304 B/op     1 
 BenchmarkTimingObfuscation-12           5008      262179 ns/op     0 B/op     0 allocs/op
 BenchmarkTrafficPadding-12           8616214       119.9 ns/op     0 B/op     0 allocs/op
 BenchmarkFlowWatermark-12             607738      1937 ns/op    1152 B/op     1 allocs/op
+BenchmarkHTTPSteganographyObfuscation-12  460210  2566 ns/op    4171 B/op    52 allocs/op
 BenchmarkDNSTunnelObfuscation-12      470808      2658 ns/op    5291 B/op    48 allocs/op
 ```
 
@@ -376,8 +409,9 @@ BenchmarkDNSTunnelObfuscation-12      470808      2658 ns/op    5291 B/op    48 
 4. **HTTP Mimicry**: Средняя скорость (~671ns/op, 15 аллокаций)
 5. **XOR Cipher**: Медленный (~1041ns/op, 1 аллокация)
 6. **Flow Watermarking**: Медленный (~1937ns/op, 1 аллокация)
-7. **DNS Tunneling**: Медленный (~2658ns/op, 48 аллокаций)
-8. **Timing Obfuscation**: Самый медленный* (~262μs/op, 0 аллокаций)
+7. **HTTP Steganography**: Медленный (~2566ns/op, 52 аллокации)
+8. **DNS Tunneling**: Медленный (~2658ns/op, 48 аллокаций)
+9. **Timing Obfuscation**: Самый медленный* (~262μs/op, 0 аллокаций)
 
 *Примечание: Высокое время выполнения для Timing Obfuscation обусловлено намеренными задержками, а не вычислительной сложностью.
 
