@@ -801,3 +801,296 @@ func BenchmarkPacketPaddingObfuscation(b *testing.B) {
 		}
 	}
 }
+
+func TestTimingObfuscation(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TimingObfsConfig{
+		Enabled:      true,
+		MinDelay:     1 * time.Millisecond,
+		MaxDelay:     10 * time.Millisecond,
+		RandomJitter: true,
+	}
+
+	timing, err := NewTimingObfuscation(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create timing obfuscation: %v", err)
+	}
+
+	if timing.Name() != MethodTimingObfs {
+		t.Errorf("Expected method name %s, got %s", MethodTimingObfs, timing.Name())
+	}
+
+	if !timing.IsAvailable() {
+		t.Error("Timing obfuscation should be available")
+	}
+
+	// Test data obfuscation with timing
+	testData := []byte("Test packet data for timing obfuscation")
+
+	// Measure time for obfuscation (should include delay)
+	start := time.Now()
+	obfuscated, err := timing.Obfuscate(testData)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Data should remain unchanged
+	if !bytes.Equal(testData, obfuscated) {
+		t.Errorf("Timing obfuscation should not modify data.\nOriginal: %s\nObfuscated: %s",
+			string(testData), string(obfuscated))
+	}
+
+	// Should have added some delay (at least minimum delay)
+	if duration < config.MinDelay {
+		t.Errorf("Expected delay at least %v, got %v", config.MinDelay, duration)
+	}
+
+	// Should not exceed maximum delay plus some tolerance
+	tolerance := 5 * time.Millisecond
+	if duration > config.MaxDelay+tolerance {
+		t.Errorf("Expected delay at most %v + tolerance, got %v", config.MaxDelay, duration)
+	}
+
+	// Deobfuscation should be immediate (no delay) and return original data
+	start = time.Now()
+	deobfuscated, err := timing.Deobfuscate(obfuscated)
+	deobfuscateDuration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Timing obfuscation round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Deobfuscation should be fast (no added delay)
+	if deobfuscateDuration > 1*time.Millisecond {
+		t.Errorf("Deobfuscation took too long: %v", deobfuscateDuration)
+	}
+
+	// Check metrics
+	metrics := timing.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+
+	if metrics.BytesProcessed != int64(len(testData)*2) {
+		t.Errorf("Expected %d bytes processed, got %d", len(testData)*2, metrics.BytesProcessed)
+	}
+}
+
+func TestTimingObfuscationDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	timing, err := NewTimingObfuscation(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create timing obfuscation with default config: %v", err)
+	}
+
+	// Verify that defaults were set
+	timingObfs := timing.(*TimingObfuscation)
+	if timingObfs.config.MinDelay != 1*time.Millisecond {
+		t.Errorf("Expected default MinDelay 1ms, got %v", timingObfs.config.MinDelay)
+	}
+
+	if timingObfs.config.MaxDelay != 50*time.Millisecond {
+		t.Errorf("Expected default MaxDelay 50ms, got %v", timingObfs.config.MaxDelay)
+	}
+
+	if !timingObfs.config.RandomJitter {
+		t.Error("Expected default RandomJitter to be true")
+	}
+
+	// Test functionality with defaults
+	testData := []byte("Default config test")
+
+	start := time.Now()
+	obfuscated, err := timing.Obfuscate(testData)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with defaults: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Timing obfuscation with defaults should not modify data")
+	}
+
+	// Should have added some delay
+	if duration < 1*time.Millisecond {
+		t.Errorf("Expected delay with defaults, got %v", duration)
+	}
+}
+
+func TestTimingObfuscationDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TimingObfsConfig{
+		Enabled:      false,
+		MinDelay:     10 * time.Millisecond,
+		MaxDelay:     100 * time.Millisecond,
+		RandomJitter: true,
+	}
+
+	timing, err := NewTimingObfuscation(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled timing obfuscation: %v", err)
+	}
+
+	if timing.IsAvailable() {
+		t.Error("Disabled timing obfuscation should not be available")
+	}
+
+	testData := []byte("Test with disabled timing obfuscation")
+
+	// Should be very fast when disabled
+	start := time.Now()
+	obfuscated, err := timing.Obfuscate(testData)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to obfuscate when disabled: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Disabled timing obfuscation should not modify data")
+	}
+
+	// Should not add significant delay when disabled
+	if duration > 1*time.Millisecond {
+		t.Errorf("Disabled timing obfuscation should be fast, took %v", duration)
+	}
+}
+
+func TestTimingObfuscationFixedDelay(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TimingObfsConfig{
+		Enabled:      true,
+		MinDelay:     5 * time.Millisecond,
+		MaxDelay:     5 * time.Millisecond, // Same as min for fixed delay
+		RandomJitter: false,                // Disable jitter for predictable delay
+	}
+
+	timing, err := NewTimingObfuscation(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create fixed delay timing obfuscation: %v", err)
+	}
+
+	testData := []byte("Test fixed delay")
+
+	// Test multiple times to ensure consistent delay
+	for i := 0; i < 3; i++ {
+		start := time.Now()
+		_, err := timing.Obfuscate(testData)
+		duration := time.Since(start)
+
+		if err != nil {
+			t.Fatalf("Failed to obfuscate (iteration %d): %v", i, err)
+		}
+
+		// Should be close to the fixed delay
+		tolerance := 2 * time.Millisecond
+		if duration < config.MaxDelay-tolerance || duration > config.MaxDelay+tolerance {
+			t.Errorf("Iteration %d: Expected delay around %v, got %v", i, config.MaxDelay, duration)
+		}
+	}
+}
+
+func TestEngineWithTimingObfuscation(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodTimingObfs},
+		PrimaryMethod:   MethodTimingObfs,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		TimingObfuscation: TimingObfsConfig{
+			Enabled:      true,
+			MinDelay:     1 * time.Millisecond,
+			MaxDelay:     5 * time.Millisecond,
+			RandomJitter: true,
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with timing obfuscation: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodTimingObfs {
+		t.Errorf("Expected current method %s, got %s", MethodTimingObfs, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Timing obfuscation engine test data")
+
+	start := time.Now()
+	obfuscated, err := engine.ObfuscateData(testData)
+	duration := time.Since(start)
+
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Engine timing obfuscation should not modify data")
+	}
+
+	// Should have added some delay
+	if duration < 1*time.Millisecond {
+		t.Errorf("Expected delay through engine, got %v", duration)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine timing obfuscation round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkTimingObfuscation(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &TimingObfsConfig{
+		Enabled:      true,
+		MinDelay:     100 * time.Microsecond, // Use smaller delays for benchmarking
+		MaxDelay:     500 * time.Microsecond,
+		RandomJitter: true,
+	}
+
+	timing, err := NewTimingObfuscation(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create timing obfuscation: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("Hello, Timing! "), 50) // ~750 bytes
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := timing.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("Timing obfuscation failed: %v", err)
+		}
+	}
+}

@@ -151,14 +151,51 @@ padding, err := obfuscation.NewPacketPadding(config, logger)
 
 **Документация:** [Packet Padding](packet_padding.md)
 
-### HTTP Mimicry (в разработке)
+### Timing Obfuscation ✅
 
-Маскировка VPN трафика под обычные HTTP запросы.
+Изменение временных интервалов между пакетами для маскировки паттернов трафика.
 
 **Преимущества:**
-- Имитирует реальные веб-сайты
-- Настраиваемые User-Agent и заголовки
-- Поддержка различных HTTP методов
+- Скрывает характерные временные паттерны VPN трафика
+- Использует экспоненциальное распределение для реалистичности
+- Настраиваемые диапазоны задержек (от микросекунд до секунд)
+- Не изменяет содержимое пакетов, только временные интервалы
+
+**Использование:**
+```go
+config := &obfuscation.TimingObfsConfig{
+    Enabled:      true,
+    MinDelay:     1 * time.Millisecond,
+    MaxDelay:     50 * time.Millisecond,
+    RandomJitter: true,
+}
+timing, err := obfuscation.NewTimingObfuscation(config, logger)
+```
+
+**Документация:** [Timing Obfuscation](timing_obfuscation.md)
+
+### HTTP Mimicry ✅
+
+Маскировка VPN трафика под обычные HTTP запросы с реалистичными заголовками.
+
+**Преимущества:**
+- Имитирует реальные веб-сайты и API запросы
+- Адаптивное кодирование данных (GET/POST методы)
+- Современные User-Agent строки (2024)
+- Поддержка различных HTTP методов и заголовков
+
+**Использование:**
+```go
+config := &obfuscation.HTTPMimicryConfig{
+    UserAgent:     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0",
+    FakeHost:      "api.github.com",
+    CustomHeaders: map[string]string{"Authorization": "Bearer token"},
+    MimicWebsite:  "https://api.github.com",
+}
+mimicry, err := obfuscation.NewHTTPMimicry(config, logger)
+```
+
+**Документация:** [HTTP Mimicry](http_mimicry.md)
 
 ## Региональные профили
 
@@ -237,6 +274,7 @@ BenchmarkXORObfuscation-12           1266703     944.6 ns/op     1408 B/op     1
 BenchmarkTLSTunnelObfuscation-12    13643611      86.85 ns/op        0 B/op     0 allocs/op
 BenchmarkHTTPMimicryObfuscation-12   1798338     672.1 ns/op     3494 B/op    15 allocs/op
 BenchmarkPacketPaddingObfuscation-12 2734774     447.9 ns/op     2304 B/op     1 allocs/op
+BenchmarkTimingObfuscation-12          4876    263468 ns/op        0 B/op     0 allocs/op
 ```
 
 ### Сравнение производительности методов
@@ -244,7 +282,10 @@ BenchmarkPacketPaddingObfuscation-12 2734774     447.9 ns/op     2304 B/op     1
 1. **TLS Tunneling**: Самый быстрый (86.85 ns/op, 0 аллокаций)
 2. **Packet Padding**: Хорошая скорость (447.9 ns/op, 1 аллокация)
 3. **HTTP Mimicry**: Средняя скорость (672.1 ns/op, 15 аллокаций)
-4. **XOR Cipher**: Самый медленный (944.6 ns/op, 1 аллокация)
+4. **XOR Cipher**: Медленный (944.6 ns/op, 1 аллокация)
+5. **Timing Obfuscation**: Самый медленный* (263.5μs/op, 0 аллокаций)
+
+*Примечание: Высокое время выполнения для Timing Obfuscation обусловлено намеренными задержками, а не вычислительной сложностью.
 
 ## Конфигурация
 

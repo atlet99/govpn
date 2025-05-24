@@ -1109,8 +1109,179 @@ func (c *packetPaddingConn) Write(b []byte) (n int, err error) {
 	return len(b), nil
 }
 
+// TimingObfuscation introduces random delays between packets to obfuscate timing patterns
+type TimingObfuscation struct {
+	config  *TimingObfsConfig
+	metrics ObfuscatorMetrics
+	mu      sync.RWMutex
+	logger  *log.Logger
+}
+
 func NewTimingObfuscation(config *TimingObfsConfig, logger *log.Logger) (Obfuscator, error) {
-	return &stubObfuscator{name: MethodTimingObfs, logger: logger}, nil
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &TimingObfsConfig{
+			Enabled:      true,
+			MinDelay:     1 * time.Millisecond,
+			MaxDelay:     50 * time.Millisecond,
+			RandomJitter: true,
+		}
+	}
+
+	// Set defaults if not configured
+	if config.MinDelay <= 0 {
+		config.MinDelay = 1 * time.Millisecond
+	}
+	if config.MaxDelay <= 0 {
+		config.MaxDelay = 50 * time.Millisecond
+	}
+	if config.MinDelay > config.MaxDelay {
+		config.MinDelay, config.MaxDelay = config.MaxDelay, config.MinDelay
+	}
+
+	return &TimingObfuscation{
+		config: config,
+		logger: logger,
+	}, nil
+}
+
+func (t *TimingObfuscation) Name() ObfuscationMethod {
+	return MethodTimingObfs
+}
+
+func (t *TimingObfuscation) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		t.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !t.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Apply timing delay
+	delay := t.calculateDelay()
+	if delay > 0 {
+		time.Sleep(delay)
+	}
+
+	// Return data unchanged - timing obfuscation doesn't modify data
+	return data, nil
+}
+
+func (t *TimingObfuscation) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		t.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	// Timing obfuscation doesn't modify data, so deobfuscation just returns the data
+	return data, nil
+}
+
+func (t *TimingObfuscation) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &timingObfuscationConn{
+		Conn:   conn,
+		timing: t,
+	}, nil
+}
+
+func (t *TimingObfuscation) IsAvailable() bool {
+	return t.config.Enabled
+}
+
+func (t *TimingObfuscation) GetMetrics() ObfuscatorMetrics {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.metrics
+}
+
+func (t *TimingObfuscation) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.metrics.PacketsProcessed++
+	t.metrics.BytesProcessed += int64(dataSize)
+	t.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		t.metrics.Errors++
+	}
+
+	// Update average processing time
+	if t.metrics.AvgProcessTime == 0 {
+		t.metrics.AvgProcessTime = processingTime
+	} else {
+		t.metrics.AvgProcessTime = (t.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// calculateDelay calculates the delay to apply based on configuration
+func (t *TimingObfuscation) calculateDelay() time.Duration {
+	if !t.config.RandomJitter {
+		// Use fixed maximum delay
+		return t.config.MaxDelay
+	}
+
+	// Calculate random delay between min and max
+	delayRange := t.config.MaxDelay - t.config.MinDelay
+	if delayRange <= 0 {
+		return t.config.MinDelay
+	}
+
+	// Use exponential distribution for more realistic timing patterns
+	// This creates more natural-looking traffic timing
+	randomFactor := mathrand.ExpFloat64()
+	if randomFactor > 3.0 { // Cap the exponential distribution
+		randomFactor = 3.0
+	}
+
+	// Scale to our delay range
+	delay := t.config.MinDelay + time.Duration(float64(delayRange)*randomFactor/3.0)
+
+	// Ensure we don't exceed maximum delay
+	if delay > t.config.MaxDelay {
+		delay = t.config.MaxDelay
+	}
+
+	return delay
+}
+
+// timingObfuscationConn wraps a connection with timing obfuscation
+type timingObfuscationConn struct {
+	net.Conn
+	timing *TimingObfuscation
+}
+
+func (c *timingObfuscationConn) Read(b []byte) (n int, err error) {
+	// Apply timing delay before reading
+	if c.timing.config.Enabled {
+		delay := c.timing.calculateDelay()
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+	}
+
+	return c.Conn.Read(b)
+}
+
+func (c *timingObfuscationConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	// Apply timing delay before writing
+	if c.timing.config.Enabled {
+		delay := c.timing.calculateDelay()
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+	}
+
+	return c.Conn.Write(b)
 }
 
 func NewHTTPSteganography(logger *log.Logger) (Obfuscator, error) {

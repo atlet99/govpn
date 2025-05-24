@@ -48,14 +48,20 @@ func main() {
 	demoPacketPadding(logger)
 	fmt.Println()
 
+	// Timing Obfuscation demonstration
+	fmt.Println("6. Timing Obfuscation Demo")
+	fmt.Println("--------------------------")
+	demoTimingObfuscation(logger)
+	fmt.Println()
+
 	// HTTP Mimicry demonstration
-	fmt.Println("6. HTTP Mimicry Demo")
+	fmt.Println("7. HTTP Mimicry Demo")
 	fmt.Println("--------------------")
 	demoHTTPMimicry(logger)
 	fmt.Println()
 
 	// Auto-switching demonstration
-	fmt.Println("7. Auto-switching Demo")
+	fmt.Println("8. Auto-switching Demo")
 	fmt.Println("----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -397,6 +403,171 @@ func demoPacketPadding(logger *log.Logger) {
 	paddingMetrics := padding.GetMetrics()
 	fmt.Printf("Direct padding metrics: %d packets, %d bytes processed\n",
 		paddingMetrics.PacketsProcessed, paddingMetrics.BytesProcessed)
+}
+
+func demoTimingObfuscation(logger *log.Logger) {
+	// Create timing obfuscation configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodTimingObfs},
+		PrimaryMethod:   obfuscation.MethodTimingObfs,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		TimingObfuscation: obfuscation.TimingObfsConfig{
+			Enabled:      true,
+			MinDelay:     5 * time.Millisecond,
+			MaxDelay:     25 * time.Millisecond,
+			RandomJitter: true,
+		},
+	}
+
+	// Create engine with timing obfuscation
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create timing obfuscation engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("Timing Obfuscation method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Min delay: %v\n", config.TimingObfuscation.MinDelay)
+	fmt.Printf("Max delay: %v\n", config.TimingObfuscation.MaxDelay)
+	fmt.Printf("Random jitter: %v\n", config.TimingObfuscation.RandomJitter)
+
+	// Test different packet types to show timing behavior
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Control packet", []byte("PING")},
+		{"Auth request", []byte(`{"type":"auth","user":"alice","token":"abc123"}`)},
+		{"Data transfer", []byte("Lorem ipsum dolor sit amet, consectetur adipiscing elit...")},
+		{"Heartbeat", []byte("HEARTBEAT_01")},
+		{"Large payload", bytes.Repeat([]byte("BULK_DATA_"), 50)}, // ~500 bytes
+	}
+
+	fmt.Printf("\nTesting timing delays (watch the timestamps):\n")
+
+	for _, tc := range testCases {
+		fmt.Printf("\nProcessing %s:\n", tc.name)
+		fmt.Printf("Data size: %d bytes\n", len(tc.data))
+
+		// Record start time
+		start := time.Now()
+		fmt.Printf("Start time: %s\n", start.Format("15:04:05.000"))
+
+		// Obfuscate with timing delay
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		afterObfuscate := time.Now()
+		obfuscateDelay := afterObfuscate.Sub(start)
+		fmt.Printf("After obfuscate: %s (delay: %v)\n",
+			afterObfuscate.Format("15:04:05.000"), obfuscateDelay)
+
+		// Data should remain unchanged (timing obfuscation doesn't modify data)
+		if !bytes.Equal(tc.data, obfuscated) {
+			log.Printf("Warning: Data was modified during timing obfuscation!")
+		}
+
+		// Deobfuscate (should be immediate)
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		afterDeobfuscate := time.Now()
+		deobfuscateDelay := afterDeobfuscate.Sub(afterObfuscate)
+		fmt.Printf("After deobfuscate: %s (delay: %v)\n",
+			afterDeobfuscate.Format("15:04:05.000"), deobfuscateDelay)
+
+		totalTime := afterDeobfuscate.Sub(start)
+		fmt.Printf("Total processing time: %v\n", totalTime)
+		fmt.Printf("Round-trip success: %v\n", bytes.Equal(tc.data, deobfuscated))
+
+		// Small delay between test cases for better readability
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Show timing obfuscation metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nTiming Obfuscation metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+	if methodMetrics, exists := metrics.MethodMetrics[obfuscation.MethodTimingObfs]; exists {
+		fmt.Printf("- Average processing time: %v\n", methodMetrics.AvgProcessTime)
+	}
+
+	// Test the actual timing obfuscator directly with different configurations
+	fmt.Printf("\nDirect Timing Obfuscation test (fixed delay):\n")
+	timingConfig := &obfuscation.TimingObfsConfig{
+		Enabled:      true,
+		MinDelay:     10 * time.Millisecond,
+		MaxDelay:     10 * time.Millisecond, // Fixed delay
+		RandomJitter: false,                 // Disable jitter for predictable timing
+	}
+
+	timing, err := obfuscation.NewTimingObfuscation(timingConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct timing obfuscation: %v", err)
+		return
+	}
+
+	directData := []byte("Direct timing test with fixed 10ms delay")
+	fmt.Printf("Testing fixed delay (should be exactly 10ms):\n")
+
+	// Test multiple times to show consistency
+	for i := 0; i < 3; i++ {
+		start := time.Now()
+		obfuscated, err := timing.Obfuscate(directData)
+		elapsed := time.Since(start)
+
+		if err != nil {
+			log.Printf("Direct obfuscation failed: %v", err)
+			continue
+		}
+
+		fmt.Printf("  Attempt %d: %v\n", i+1, elapsed)
+
+		if !bytes.Equal(directData, obfuscated) {
+			log.Printf("Warning: Data was modified!")
+		}
+	}
+
+	// Show timing obfuscation metrics
+	timingMetrics := timing.GetMetrics()
+	fmt.Printf("Direct timing metrics: %d packets, %d bytes processed\n",
+		timingMetrics.PacketsProcessed, timingMetrics.BytesProcessed)
+
+	// Test exponential distribution vs uniform distribution
+	fmt.Printf("\nTesting exponential vs uniform delay distribution:\n")
+
+	// Exponential distribution (more realistic)
+	expConfig := &obfuscation.TimingObfsConfig{
+		Enabled:      true,
+		MinDelay:     1 * time.Millisecond,
+		MaxDelay:     20 * time.Millisecond,
+		RandomJitter: true, // Uses exponential distribution
+	}
+
+	expTiming, err := obfuscation.NewTimingObfuscation(expConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create exponential timing: %v", err)
+		return
+	}
+
+	fmt.Printf("Exponential distribution (5 samples):\n")
+	for i := 0; i < 5; i++ {
+		start := time.Now()
+		_, err := expTiming.Obfuscate([]byte("sample"))
+		elapsed := time.Since(start)
+		if err == nil {
+			fmt.Printf("  Sample %d: %v\n", i+1, elapsed)
+		}
+	}
 }
 
 func demoHTTPMimicry(logger *log.Logger) {
