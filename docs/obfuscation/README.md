@@ -174,6 +174,33 @@ timing, err := obfuscation.NewTimingObfuscation(config, logger)
 
 **Документация:** [Timing Obfuscation](timing_obfuscation.md)
 
+### Traffic Padding ✅
+
+Добавление фиктивного трафика между реальными пакетами для маскировки паттернов активности.
+
+**Преимущества:**
+- Создает постоянный поток трафика для маскировки простоев
+- Поддерживает режим всплесков для имитации реальной активности
+- Адаптивные интервалы в зависимости от активности
+- Автоматическая фильтрация фиктивных пакетов на стороне получателя
+
+**Использование:**
+```go
+config := &obfuscation.TrafficPaddingConfig{
+    Enabled:      true,
+    MinInterval:  100 * time.Millisecond,
+    MaxInterval:  2 * time.Second,
+    MinDummySize: 64,
+    MaxDummySize: 1024,
+    BurstMode:    true,
+    BurstSize:    3,
+    AdaptiveMode: true,
+}
+padding, err := obfuscation.NewTrafficPadding(config, logger)
+```
+
+**Документация:** [Traffic Padding](traffic_padding.md)
+
 ### HTTP Mimicry ✅
 
 Маскировка VPN трафика под обычные HTTP запросы с реалистичными заголовками.
@@ -275,15 +302,17 @@ BenchmarkTLSTunnelObfuscation-12    13643611      86.85 ns/op        0 B/op     
 BenchmarkHTTPMimicryObfuscation-12   1798338     672.1 ns/op     3494 B/op    15 allocs/op
 BenchmarkPacketPaddingObfuscation-12 2734774     447.9 ns/op     2304 B/op     1 allocs/op
 BenchmarkTimingObfuscation-12          4876    263468 ns/op        0 B/op     0 allocs/op
+BenchmarkTrafficPadding-12        10056230     119.5 ns/op        0 B/op     0 allocs/op
 ```
 
 ### Сравнение производительности методов
 
 1. **TLS Tunneling**: Самый быстрый (86.85 ns/op, 0 аллокаций)
-2. **Packet Padding**: Хорошая скорость (447.9 ns/op, 1 аллокация)
-3. **HTTP Mimicry**: Средняя скорость (672.1 ns/op, 15 аллокаций)
-4. **XOR Cipher**: Медленный (944.6 ns/op, 1 аллокация)
-5. **Timing Obfuscation**: Самый медленный* (263.5μs/op, 0 аллокаций)
+2. **Traffic Padding**: Очень быстрый (119.5 ns/op, 0 аллокаций)
+3. **Packet Padding**: Хорошая скорость (447.9 ns/op, 1 аллокация)
+4. **HTTP Mimicry**: Средняя скорость (672.1 ns/op, 15 аллокаций)
+5. **XOR Cipher**: Медленный (944.6 ns/op, 1 аллокация)
+6. **Timing Obfuscation**: Самый медленный* (263.5μs/op, 0 аллокаций)
 
 *Примечание: Высокое время выполнения для Timing Obfuscation обусловлено намеренными задержками, а не вычислительной сложностью.
 

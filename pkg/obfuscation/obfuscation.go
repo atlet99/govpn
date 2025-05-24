@@ -23,14 +23,15 @@ import (
 type ObfuscationMethod string
 
 const (
-	MethodTLSTunnel     ObfuscationMethod = "tls_tunnel"
-	MethodHTTPMimicry   ObfuscationMethod = "http_mimicry"
-	MethodSSHMimicry    ObfuscationMethod = "ssh_mimicry"
-	MethodDNSTunnel     ObfuscationMethod = "dns_tunnel"
-	MethodXORCipher     ObfuscationMethod = "xor_cipher"
-	MethodPacketPadding ObfuscationMethod = "packet_padding"
-	MethodTimingObfs    ObfuscationMethod = "timing_obfs"
-	MethodHTTPStego     ObfuscationMethod = "http_stego"
+	MethodTLSTunnel      ObfuscationMethod = "tls_tunnel"
+	MethodHTTPMimicry    ObfuscationMethod = "http_mimicry"
+	MethodSSHMimicry     ObfuscationMethod = "ssh_mimicry"
+	MethodDNSTunnel      ObfuscationMethod = "dns_tunnel"
+	MethodXORCipher      ObfuscationMethod = "xor_cipher"
+	MethodPacketPadding  ObfuscationMethod = "packet_padding"
+	MethodTimingObfs     ObfuscationMethod = "timing_obfs"
+	MethodTrafficPadding ObfuscationMethod = "traffic_padding"
+	MethodHTTPStego      ObfuscationMethod = "http_stego"
 )
 
 // Obfuscator interface for all obfuscation methods
@@ -54,18 +55,19 @@ type ObfuscatorMetrics struct {
 
 // Config contains configuration for the obfuscation engine
 type Config struct {
-	EnabledMethods    []ObfuscationMethod `json:"enabled_methods"`
-	PrimaryMethod     ObfuscationMethod   `json:"primary_method"`
-	FallbackMethods   []ObfuscationMethod `json:"fallback_methods"`
-	AutoDetection     bool                `json:"auto_detection"`
-	SwitchThreshold   int                 `json:"switch_threshold"`
-	DetectionTimeout  time.Duration       `json:"detection_timeout"`
-	RegionalProfile   string              `json:"regional_profile"`
-	PacketPadding     PacketPaddingConfig `json:"packet_padding"`
-	TimingObfuscation TimingObfsConfig    `json:"timing_obfuscation"`
-	TLSTunnel         TLSTunnelConfig     `json:"tls_tunnel"`
-	HTTPMimicry       HTTPMimicryConfig   `json:"http_mimicry"`
-	XORKey            []byte              `json:"xor_key,omitempty"`
+	EnabledMethods    []ObfuscationMethod  `json:"enabled_methods"`
+	PrimaryMethod     ObfuscationMethod    `json:"primary_method"`
+	FallbackMethods   []ObfuscationMethod  `json:"fallback_methods"`
+	AutoDetection     bool                 `json:"auto_detection"`
+	SwitchThreshold   int                  `json:"switch_threshold"`
+	DetectionTimeout  time.Duration        `json:"detection_timeout"`
+	RegionalProfile   string               `json:"regional_profile"`
+	PacketPadding     PacketPaddingConfig  `json:"packet_padding"`
+	TimingObfuscation TimingObfsConfig     `json:"timing_obfuscation"`
+	TrafficPadding    TrafficPaddingConfig `json:"traffic_padding"`
+	TLSTunnel         TLSTunnelConfig      `json:"tls_tunnel"`
+	HTTPMimicry       HTTPMimicryConfig    `json:"http_mimicry"`
+	XORKey            []byte               `json:"xor_key,omitempty"`
 }
 
 type PacketPaddingConfig struct {
@@ -80,6 +82,17 @@ type TimingObfsConfig struct {
 	MinDelay     time.Duration `json:"min_delay"`
 	MaxDelay     time.Duration `json:"max_delay"`
 	RandomJitter bool          `json:"random_jitter"`
+}
+
+type TrafficPaddingConfig struct {
+	Enabled      bool          `json:"enabled"`
+	MinInterval  time.Duration `json:"min_interval"`
+	MaxInterval  time.Duration `json:"max_interval"`
+	MinDummySize int           `json:"min_dummy_size"`
+	MaxDummySize int           `json:"max_dummy_size"`
+	BurstMode    bool          `json:"burst_mode"`
+	BurstSize    int           `json:"burst_size"`
+	AdaptiveMode bool          `json:"adaptive_mode"`
 }
 
 type TLSTunnelConfig struct {
@@ -1284,6 +1297,320 @@ func (c *timingObfuscationConn) Write(b []byte) (n int, err error) {
 	return c.Conn.Write(b)
 }
 
+// TrafficPadding adds dummy traffic between real packets to mask traffic patterns
+type TrafficPadding struct {
+	config       *TrafficPaddingConfig
+	metrics      ObfuscatorMetrics
+	mu           sync.RWMutex
+	logger       *log.Logger
+	stopChannel  chan struct{}
+	isActive     bool
+	lastActivity time.Time
+}
+
+func NewTrafficPadding(config *TrafficPaddingConfig, logger *log.Logger) (Obfuscator, error) {
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &TrafficPaddingConfig{
+			Enabled:      true,
+			MinInterval:  100 * time.Millisecond,
+			MaxInterval:  2 * time.Second,
+			MinDummySize: 64,
+			MaxDummySize: 1024,
+			BurstMode:    false,
+			BurstSize:    3,
+			AdaptiveMode: true,
+		}
+	}
+
+	// Set defaults if not configured
+	if config.MinInterval <= 0 {
+		config.MinInterval = 100 * time.Millisecond
+	}
+	if config.MaxInterval <= 0 {
+		config.MaxInterval = 2 * time.Second
+	}
+	if config.MinInterval > config.MaxInterval {
+		config.MinInterval, config.MaxInterval = config.MaxInterval, config.MinInterval
+	}
+	if config.MinDummySize <= 0 {
+		config.MinDummySize = 64
+	}
+	if config.MaxDummySize <= 0 {
+		config.MaxDummySize = 1024
+	}
+	if config.MinDummySize > config.MaxDummySize {
+		config.MinDummySize, config.MaxDummySize = config.MaxDummySize, config.MinDummySize
+	}
+	if config.BurstSize <= 0 {
+		config.BurstSize = 3
+	}
+
+	return &TrafficPadding{
+		config:       config,
+		logger:       logger,
+		stopChannel:  make(chan struct{}),
+		isActive:     false,
+		lastActivity: time.Now(),
+	}, nil
+}
+
+func (tp *TrafficPadding) Name() ObfuscationMethod {
+	return MethodTrafficPadding
+}
+
+func (tp *TrafficPadding) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		tp.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if !tp.config.Enabled || len(data) == 0 {
+		return data, nil
+	}
+
+	// Update last activity time
+	tp.mu.Lock()
+	tp.lastActivity = time.Now()
+	tp.mu.Unlock()
+
+	// Traffic padding doesn't modify the data, just injects dummy traffic
+	// The dummy traffic injection happens in the connection wrapper
+	return data, nil
+}
+
+func (tp *TrafficPadding) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		tp.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	// Check if this is a dummy packet by examining a magic header
+	if len(data) >= 8 && string(data[:8]) == "DUMMY_TP" {
+		// This is a dummy packet, return empty data
+		return []byte{}, nil
+	}
+
+	// Return original data (real traffic)
+	return data, nil
+}
+
+func (tp *TrafficPadding) WrapConn(conn net.Conn) (net.Conn, error) {
+	wrappedConn := &trafficPaddingConn{
+		Conn:    conn,
+		padding: tp,
+		buffer:  make(chan []byte, 100), // Buffer for dummy packets
+	}
+
+	// Start dummy traffic generation if enabled
+	if tp.config.Enabled {
+		go wrappedConn.startDummyTrafficGenerator()
+	}
+
+	return wrappedConn, nil
+}
+
+func (tp *TrafficPadding) IsAvailable() bool {
+	return tp.config.Enabled
+}
+
+func (tp *TrafficPadding) GetMetrics() ObfuscatorMetrics {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+	return tp.metrics
+}
+
+func (tp *TrafficPadding) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	tp.mu.Lock()
+	defer tp.mu.Unlock()
+
+	tp.metrics.PacketsProcessed++
+	tp.metrics.BytesProcessed += int64(dataSize)
+	tp.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		tp.metrics.Errors++
+	}
+
+	// Update average processing time
+	if tp.metrics.AvgProcessTime == 0 {
+		tp.metrics.AvgProcessTime = processingTime
+	} else {
+		tp.metrics.AvgProcessTime = (tp.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// generateDummyPacket creates a dummy packet for traffic padding
+func (tp *TrafficPadding) generateDummyPacket() []byte {
+	// Calculate dummy packet size
+	dummySize := tp.config.MinDummySize
+	if tp.config.MaxDummySize > tp.config.MinDummySize {
+		sizeRange := tp.config.MaxDummySize - tp.config.MinDummySize
+		dummySize = tp.config.MinDummySize + mathrand.Intn(sizeRange+1)
+	}
+
+	// Create dummy packet with magic header
+	dummy := make([]byte, dummySize)
+	copy(dummy[:8], []byte("DUMMY_TP"))
+
+	// Fill rest with random data
+	if len(dummy) > 8 {
+		_, err := rand.Read(dummy[8:])
+		if err != nil {
+			// Fallback to simple pattern if random generation fails
+			for i := 8; i < len(dummy); i++ {
+				dummy[i] = byte(i % 256)
+			}
+		}
+	}
+
+	return dummy
+}
+
+// calculateInterval calculates the next interval for dummy packet injection
+func (tp *TrafficPadding) calculateInterval() time.Duration {
+	if tp.config.MinInterval == tp.config.MaxInterval {
+		return tp.config.MaxInterval
+	}
+
+	intervalRange := tp.config.MaxInterval - tp.config.MinInterval
+	randomOffset := time.Duration(mathrand.Int63n(int64(intervalRange)))
+
+	interval := tp.config.MinInterval + randomOffset
+
+	// Apply adaptive mode - reduce interval during low activity
+	if tp.config.AdaptiveMode {
+		tp.mu.RLock()
+		timeSinceActivity := time.Since(tp.lastActivity)
+		tp.mu.RUnlock()
+
+		// If no activity for a while, reduce interval to maintain cover traffic
+		if timeSinceActivity > 5*time.Second {
+			interval = interval / 2
+		}
+	}
+
+	return interval
+}
+
+// trafficPaddingConn wraps a connection with traffic padding capabilities
+type trafficPaddingConn struct {
+	net.Conn
+	padding *TrafficPadding
+	buffer  chan []byte
+	mu      sync.Mutex
+}
+
+func (c *trafficPaddingConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	// Update activity time
+	c.padding.mu.Lock()
+	c.padding.lastActivity = time.Now()
+	c.padding.mu.Unlock()
+
+	// Check if this is a dummy packet
+	deobfuscated, deobfErr := c.padding.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	// If it's a dummy packet (empty result), read the next packet
+	if len(deobfuscated) == 0 {
+		// This was a dummy packet, read the next one
+		return c.Read(b)
+	}
+
+	// Copy real data back
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *trafficPaddingConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	// Update activity time
+	c.padding.mu.Lock()
+	c.padding.lastActivity = time.Now()
+	c.padding.mu.Unlock()
+
+	// Write real data
+	return c.Conn.Write(b)
+}
+
+func (c *trafficPaddingConn) Close() error {
+	// Signal dummy traffic generator to stop
+	select {
+	case c.padding.stopChannel <- struct{}{}:
+	default:
+	}
+	return c.Conn.Close()
+}
+
+// startDummyTrafficGenerator starts generating dummy traffic in the background
+func (c *trafficPaddingConn) startDummyTrafficGenerator() {
+	if !c.padding.config.Enabled {
+		return
+	}
+
+	c.padding.logger.Printf("Starting traffic padding generator")
+
+	for {
+		// Calculate next interval
+		interval := c.padding.calculateInterval()
+
+		select {
+		case <-c.padding.stopChannel:
+			c.padding.logger.Printf("Stopping traffic padding generator")
+			return
+		case <-time.After(interval):
+			// Generate and send dummy traffic
+			c.generateAndSendDummy()
+		}
+	}
+}
+
+// generateAndSendDummy generates and sends dummy packets
+func (c *trafficPaddingConn) generateAndSendDummy() {
+	if !c.padding.config.Enabled {
+		return
+	}
+
+	packetsToSend := 1
+	if c.padding.config.BurstMode {
+		packetsToSend = 1 + mathrand.Intn(c.padding.config.BurstSize)
+	}
+
+	for i := 0; i < packetsToSend; i++ {
+		dummyPacket := c.padding.generateDummyPacket()
+
+		// Try to send dummy packet (non-blocking)
+		go func(packet []byte) {
+			c.mu.Lock()
+			defer c.mu.Unlock()
+
+			_, err := c.Conn.Write(packet)
+			if err != nil {
+				// Log error but don't fail - dummy traffic is best effort
+				c.padding.logger.Printf("Failed to send dummy packet: %v", err)
+			}
+		}(dummyPacket)
+
+		// Small delay between burst packets
+		if i < packetsToSend-1 && c.padding.config.BurstMode {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
 func NewHTTPSteganography(logger *log.Logger) (Obfuscator, error) {
 	return &stubObfuscator{name: MethodHTTPStego, logger: logger}, nil
 }
@@ -1367,6 +1694,8 @@ func (e *Engine) initializeObfuscators() error {
 			obfuscator, err = NewPacketPadding(&e.config.PacketPadding, e.logger)
 		case MethodTimingObfs:
 			obfuscator, err = NewTimingObfuscation(&e.config.TimingObfuscation, e.logger)
+		case MethodTrafficPadding:
+			obfuscator, err = NewTrafficPadding(&e.config.TrafficPadding, e.logger)
 		case MethodHTTPStego:
 			obfuscator, err = NewHTTPSteganography(e.logger)
 		default:

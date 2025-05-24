@@ -1094,3 +1094,286 @@ func BenchmarkTimingObfuscation(b *testing.B) {
 		}
 	}
 }
+
+func TestTrafficPadding(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TrafficPaddingConfig{
+		Enabled:      true,
+		MinInterval:  10 * time.Millisecond,
+		MaxInterval:  50 * time.Millisecond,
+		MinDummySize: 32,
+		MaxDummySize: 128,
+		BurstMode:    false,
+		BurstSize:    3,
+		AdaptiveMode: true,
+	}
+
+	padding, err := NewTrafficPadding(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create traffic padding: %v", err)
+	}
+
+	if padding.Name() != MethodTrafficPadding {
+		t.Errorf("Expected method name %s, got %s", MethodTrafficPadding, padding.Name())
+	}
+
+	if !padding.IsAvailable() {
+		t.Error("Traffic padding should be available")
+	}
+
+	// Test data obfuscation (should pass through unchanged)
+	testData := []byte("Test packet data for traffic padding")
+
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Data should remain unchanged (traffic padding doesn't modify data)
+	if !bytes.Equal(testData, obfuscated) {
+		t.Errorf("Traffic padding should not modify data.\nOriginal: %s\nObfuscated: %s",
+			string(testData), string(obfuscated))
+	}
+
+	// Test deobfuscation of real data
+	deobfuscated, err := padding.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Traffic padding round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Test dummy packet detection
+	dummyPacket := []byte("DUMMY_TPsome dummy content here")
+	deobfuscatedDummy, err := padding.Deobfuscate(dummyPacket)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate dummy packet: %v", err)
+	}
+
+	// Dummy packets should return empty data
+	if len(deobfuscatedDummy) != 0 {
+		t.Errorf("Expected empty data for dummy packet, got %d bytes", len(deobfuscatedDummy))
+	}
+
+	// Check metrics
+	metrics := padding.GetMetrics()
+	if metrics.PacketsProcessed < 3 { // obfuscate + 2 deobfuscate calls
+		t.Errorf("Expected at least 3 packets processed, got %d", metrics.PacketsProcessed)
+	}
+}
+
+func TestTrafficPaddingDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	padding, err := NewTrafficPadding(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create traffic padding with default config: %v", err)
+	}
+
+	// Verify that defaults were set
+	trafficPadding := padding.(*TrafficPadding)
+	if trafficPadding.config.MinInterval != 100*time.Millisecond {
+		t.Errorf("Expected default MinInterval 100ms, got %v", trafficPadding.config.MinInterval)
+	}
+
+	if trafficPadding.config.MaxInterval != 2*time.Second {
+		t.Errorf("Expected default MaxInterval 2s, got %v", trafficPadding.config.MaxInterval)
+	}
+
+	if trafficPadding.config.MinDummySize != 64 {
+		t.Errorf("Expected default MinDummySize 64, got %d", trafficPadding.config.MinDummySize)
+	}
+
+	if trafficPadding.config.MaxDummySize != 1024 {
+		t.Errorf("Expected default MaxDummySize 1024, got %d", trafficPadding.config.MaxDummySize)
+	}
+
+	if !trafficPadding.config.AdaptiveMode {
+		t.Error("Expected default AdaptiveMode to be true")
+	}
+
+	// Test functionality with defaults
+	testData := []byte("Default config test")
+
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with defaults: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Traffic padding with defaults should not modify data")
+	}
+}
+
+func TestTrafficPaddingDisabled(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TrafficPaddingConfig{
+		Enabled:      false,
+		MinInterval:  100 * time.Millisecond,
+		MaxInterval:  1 * time.Second,
+		MinDummySize: 64,
+		MaxDummySize: 512,
+	}
+
+	padding, err := NewTrafficPadding(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create disabled traffic padding: %v", err)
+	}
+
+	if padding.IsAvailable() {
+		t.Error("Disabled traffic padding should not be available")
+	}
+
+	testData := []byte("Test with disabled traffic padding")
+
+	// Should return data unchanged when disabled
+	obfuscated, err := padding.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate when disabled: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Disabled traffic padding should not modify data")
+	}
+}
+
+func TestTrafficPaddingBurstMode(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &TrafficPaddingConfig{
+		Enabled:      true,
+		MinInterval:  50 * time.Millisecond,
+		MaxInterval:  100 * time.Millisecond,
+		MinDummySize: 32,
+		MaxDummySize: 64,
+		BurstMode:    true,
+		BurstSize:    5,
+		AdaptiveMode: false,
+	}
+
+	padding, err := NewTrafficPadding(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create burst mode traffic padding: %v", err)
+	}
+
+	// Test packet generation
+	trafficPadding := padding.(*TrafficPadding)
+	dummyPacket := trafficPadding.generateDummyPacket()
+
+	if len(dummyPacket) < config.MinDummySize {
+		t.Errorf("Generated packet too small: %d < %d", len(dummyPacket), config.MinDummySize)
+	}
+
+	if len(dummyPacket) > config.MaxDummySize {
+		t.Errorf("Generated packet too large: %d > %d", len(dummyPacket), config.MaxDummySize)
+	}
+
+	// Check magic header
+	if !bytes.HasPrefix(dummyPacket, []byte("DUMMY_TP")) {
+		t.Error("Generated packet should have DUMMY_TP magic header")
+	}
+
+	// Test interval calculation
+	interval := trafficPadding.calculateInterval()
+	if interval < config.MinInterval || interval > config.MaxInterval {
+		t.Errorf("Calculated interval %v not in range [%v, %v]", interval, config.MinInterval, config.MaxInterval)
+	}
+}
+
+func TestEngineWithTrafficPadding(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodTrafficPadding},
+		PrimaryMethod:   MethodTrafficPadding,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		TrafficPadding: TrafficPaddingConfig{
+			Enabled:      true,
+			MinInterval:  20 * time.Millisecond,
+			MaxInterval:  100 * time.Millisecond,
+			MinDummySize: 64,
+			MaxDummySize: 256,
+			BurstMode:    true,
+			BurstSize:    2,
+			AdaptiveMode: true,
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with traffic padding: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodTrafficPadding {
+		t.Errorf("Expected current method %s, got %s", MethodTrafficPadding, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Traffic padding engine test data")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, obfuscated) {
+		t.Error("Engine traffic padding should not modify data")
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine traffic padding round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkTrafficPadding(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &TrafficPaddingConfig{
+		Enabled:      true,
+		MinInterval:  10 * time.Millisecond,
+		MaxInterval:  50 * time.Millisecond,
+		MinDummySize: 64,
+		MaxDummySize: 256,
+		BurstMode:    false,
+		BurstSize:    1,
+		AdaptiveMode: false,
+	}
+
+	padding, err := NewTrafficPadding(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create traffic padding: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("Traffic padding bench "), 50) // ~1.1KB
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := padding.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("Traffic padding obfuscation failed: %v", err)
+		}
+	}
+}

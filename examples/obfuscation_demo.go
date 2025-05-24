@@ -54,14 +54,20 @@ func main() {
 	demoTimingObfuscation(logger)
 	fmt.Println()
 
+	// Traffic Padding demonstration
+	fmt.Println("7. Traffic Padding Demo")
+	fmt.Println("-----------------------")
+	demoTrafficPadding(logger)
+	fmt.Println()
+
 	// HTTP Mimicry demonstration
-	fmt.Println("7. HTTP Mimicry Demo")
+	fmt.Println("8. HTTP Mimicry Demo")
 	fmt.Println("--------------------")
 	demoHTTPMimicry(logger)
 	fmt.Println()
 
 	// Auto-switching demonstration
-	fmt.Println("8. Auto-switching Demo")
+	fmt.Println("9. Auto-switching Demo")
 	fmt.Println("----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -568,6 +574,151 @@ func demoTimingObfuscation(logger *log.Logger) {
 			fmt.Printf("  Sample %d: %v\n", i+1, elapsed)
 		}
 	}
+}
+
+func demoTrafficPadding(logger *log.Logger) {
+	// Create traffic padding configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodTrafficPadding},
+		PrimaryMethod:   obfuscation.MethodTrafficPadding,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		TrafficPadding: obfuscation.TrafficPaddingConfig{
+			Enabled:      true,
+			MinInterval:  200 * time.Millisecond,
+			MaxInterval:  1 * time.Second,
+			MinDummySize: 128,
+			MaxDummySize: 512,
+			BurstMode:    true,
+			BurstSize:    3,
+			AdaptiveMode: true,
+		},
+	}
+
+	// Create engine with traffic padding
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create traffic padding engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("Traffic Padding method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Min interval: %v\n", config.TrafficPadding.MinInterval)
+	fmt.Printf("Max interval: %v\n", config.TrafficPadding.MaxInterval)
+	fmt.Printf("Dummy size range: %d-%d bytes\n", config.TrafficPadding.MinDummySize, config.TrafficPadding.MaxDummySize)
+	fmt.Printf("Burst mode: %v (size: %d)\n", config.TrafficPadding.BurstMode, config.TrafficPadding.BurstSize)
+	fmt.Printf("Adaptive mode: %v\n", config.TrafficPadding.AdaptiveMode)
+
+	// Test different types of data to show traffic padding behavior
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Control signal", []byte("CONNECT")},
+		{"Authentication", []byte(`{"type":"auth","user":"alice","pass":"secret"}`)},
+		{"Small message", []byte("Hello, World!")},
+		{"Medium payload", bytes.Repeat([]byte("Data chunk "), 20)},         // ~220 bytes
+		{"Large transfer", bytes.Repeat([]byte("BULK_DATA_TRANSFER_"), 40)}, // ~760 bytes
+	}
+
+	fmt.Printf("\nTesting traffic padding (data is unchanged, dummy traffic added separately):\n")
+
+	for _, tc := range testCases {
+		fmt.Printf("\nProcessing %s:\n", tc.name)
+		fmt.Printf("Original size: %d bytes\n", len(tc.data))
+
+		// Process with traffic padding
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		// Data should remain unchanged (traffic padding doesn't modify data)
+		if !bytes.Equal(tc.data, obfuscated) {
+			log.Printf("Warning: Data was modified during traffic padding!")
+		}
+
+		fmt.Printf("Processed size: %d bytes (unchanged)\n", len(obfuscated))
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Round-trip success: %v\n", bytes.Equal(tc.data, deobfuscated))
+		fmt.Printf("Note: Dummy traffic is injected separately via connection wrapper\n")
+	}
+
+	// Show traffic padding metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nTraffic Padding metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+
+	// Test the actual traffic padding obfuscator directly
+	fmt.Printf("\nDirect Traffic Padding test:\n")
+	trafficConfig := &obfuscation.TrafficPaddingConfig{
+		Enabled:      true,
+		MinInterval:  100 * time.Millisecond,
+		MaxInterval:  500 * time.Millisecond,
+		MinDummySize: 64,
+		MaxDummySize: 256,
+		BurstMode:    false,
+		BurstSize:    1,
+		AdaptiveMode: false,
+	}
+
+	padding, err := obfuscation.NewTrafficPadding(trafficConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct traffic padding: %v", err)
+		return
+	}
+
+	directData := []byte("Direct traffic padding test data")
+	obfuscated, err := padding.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := padding.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", bytes.Equal(directData, deobfuscated))
+	fmt.Printf("Data size unchanged: %d bytes\n", len(obfuscated))
+
+	// Test dummy packet detection
+	fmt.Printf("\nTesting dummy packet detection:\n")
+	dummyPacket := []byte("DUMMY_TPThis is a dummy packet with random content")
+	fmt.Printf("Dummy packet size: %d bytes\n", len(dummyPacket))
+
+	deobfuscatedDummy, err := padding.Deobfuscate(dummyPacket)
+	if err != nil {
+		log.Printf("Dummy packet deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Dummy packet filtered out: %v (returned %d bytes)\n",
+		len(deobfuscatedDummy) == 0, len(deobfuscatedDummy))
+
+	// Show traffic padding metrics
+	paddingMetrics := padding.GetMetrics()
+	fmt.Printf("Direct traffic padding metrics: %d packets, %d bytes processed\n",
+		paddingMetrics.PacketsProcessed, paddingMetrics.BytesProcessed)
+
+	fmt.Printf("\nTraffic Padding overview:\n")
+	fmt.Printf("- Injects dummy packets at random intervals\n")
+	fmt.Printf("- Maintains constant traffic flow even during idle periods\n")
+	fmt.Printf("- Supports burst mode for realistic traffic patterns\n")
+	fmt.Printf("- Adaptive mode reduces intervals during low activity\n")
+	fmt.Printf("- Dummy packets are filtered out automatically\n")
 }
 
 func demoHTTPMimicry(logger *log.Logger) {
