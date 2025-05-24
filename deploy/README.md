@@ -1,158 +1,158 @@
-# Конфигурационные файлы GoVPN
+# GoVPN Configuration Files
 
-Данная папка содержит все необходимые конфигурационные файлы для настройки сервера и клиентов GoVPN с поддержкой современных методов аутентификации и обфускации трафика.
+This folder contains all necessary configuration files for setting up GoVPN server and clients with support for modern authentication methods and traffic obfuscation.
 
-## Структура файлов
+## File Structure
 
-### Основные файлы конфигурации
+### Main Configuration Files
 
-- **`server.conf`** - Основной файл конфигурации сервера
-- **`client.conf`** - Базовый файл конфигурации клиента
+- **`server.conf`** - Main server configuration file
+- **`client.conf`** - Basic client configuration file
 
-### Дополнительные модули аутентификации
+### Additional Authentication Modules
 
-- **`auth.conf`** - Базовая аутентификация по паролям
-- **`mfa.conf`** - Многофакторная аутентификация (TOTP/HOTP)
-- **`oidc.conf`** - OIDC аутентификация (Google, Microsoft, Keycloak и др.)
-- **`ldap.conf`** - LDAP аутентификация (Active Directory, OpenLDAP)
+- **`auth.conf`** - Basic password authentication
+- **`mfa.conf`** - Multi-factor authentication (TOTP/HOTP)
+- **`oidc.conf`** - OIDC authentication (Google, Microsoft, Keycloak, etc.)
+- **`ldap.conf`** - LDAP authentication (Active Directory, OpenLDAP)
 
-### Модули обфускации
+### Obfuscation Modules
 
-- **`obfuscation.conf`** - Настройки обфускации и маскировки трафика
+- **`obfuscation.conf`** - Traffic obfuscation and masking settings
 
-## Быстрый старт
+## Quick Start
 
-### 1. Базовая настройка сервера
+### 1. Basic Server Setup
 
 ```bash
-# Скопируйте основной конфиг
+# Copy main config
 cp server.conf /etc/govpn/
 cp client.conf /etc/govpn/
 
-# Настройте сертификаты
+# Setup certificates
 mkdir -p /etc/govpn/certs
-# ... скопируйте ваши сертификаты в /etc/govpn/certs/
+# ... copy your certificates to /etc/govpn/certs/
 ```
 
-### 2. Включение дополнительных методов аутентификации
+### 2. Enable Additional Authentication Methods
 
-Для включения дополнительных методов аутентификации раскомментируйте соответствующие строки в `server.conf`:
+To enable additional authentication methods, uncomment corresponding lines in `server.conf`:
 
 ```conf
-# Включить базовую аутентификацию паролем
-config auth.conf
+# Enable basic password authentication
+include auth.conf
 
-# Включить многофакторную аутентификацию
-config mfa.conf
+# Enable multi-factor authentication
+include mfa.conf
 
-# Включить OIDC аутентификацию
-config oidc.conf
+# Enable OIDC authentication
+include oidc.conf
 
-# Включить LDAP аутентификацию
-config ldap.conf
+# Enable LDAP authentication
+include ldap.conf
 ```
 
-## Детальное описание конфигураций
+## Detailed Configuration Description
 
-### Базовая конфигурация сервера (`server.conf`)
+### Basic Server Configuration (`server.conf`)
 
-Основной файл содержит базовые настройки VPN сервера:
+Main file contains basic VPN server settings:
 
-- **Сетевые настройки**: порт, протокол, тип устройства
-- **VPN сеть**: диапазон IP адресов, DNS серверы
-- **Безопасность**: алгоритмы шифрования и аутентификации
-- **Сертификаты**: пути к файлам сертификатов и ключей
-- **Подключения**: лимиты клиентов, keepalive настройки
+- **Network settings**: port, protocol, device type
+- **VPN network**: IP address range, DNS servers
+- **Security**: encryption and authentication algorithms
+- **Certificates**: paths to certificate and key files
+- **Connections**: client limits, keepalive settings
 
-### Базовая аутентификация (`auth.conf`)
+### Basic Authentication (`auth.conf`)
 
-Конфигурация для аутентификации по паролям:
+Configuration for password authentication:
 
-- **Хеширование**: Argon2 (рекомендуется) или PBKDF2
-- **Сессии**: управление временем жизни сессий
-- **Безопасность**: защита от атак, токены переподключения
+- **Hashing**: Argon2 (recommended) or PBKDF2
+- **Sessions**: session lifetime management
+- **Security**: protection against attacks, reconnection tokens
 
-#### Пример настройки Argon2:
+#### Example Argon2 configuration:
 ```conf
 auth-hash-method argon2
-auth-argon2-memory 65536     # 64MB памяти
-auth-argon2-time 3           # 3 итерации
-auth-argon2-threads 4        # 4 потока
+auth-argon2-memory 65536     # 64MB memory
+auth-argon2-time 3           # 3 iterations
+auth-argon2-threads 4        # 4 threads
 ```
 
-### Многофакторная аутентификация (`mfa.conf`)
+### Multi-Factor Authentication (`mfa.conf`)
 
-Конфигурация для двухфакторной аутентификации:
+Configuration for two-factor authentication:
 
-- **TOTP**: поддержка Google Authenticator, Microsoft Authenticator, Authy
-- **Резервные коды**: для восстановления доступа
-- **Безопасность**: защита от брутфорса, блокировки
+- **TOTP**: support for Google Authenticator, Microsoft Authenticator, Authy
+- **Backup codes**: for access recovery
+- **Security**: brute force protection, lockouts
 
-#### Совместимость с приложениями:
+#### App compatibility:
 - ✅ Google Authenticator
 - ✅ Microsoft Authenticator 
 - ✅ Authy
 - ✅ 1Password
 - ✅ Bitwarden
 
-### OIDC аутентификация (`oidc.conf`)
+### OIDC Authentication (`oidc.conf`)
 
-Интеграция с современными системами единого входа:
+Integration with modern single sign-on systems:
 
-#### Поддерживаемые провайдеры:
-- **Keycloak** - Открытое решение для корпораций
-- **Google Workspace** - Для Google организаций
-- **Microsoft Azure AD/Entra** - Для Microsoft организаций
-- **Okta** - Коммерческое решение
-- **Auth0** - Платформа аутентификации
-- **GitLab** - Для интеграции с GitLab
+#### Supported providers:
+- **Keycloak** - Open source enterprise solution
+- **Google Workspace** - For Google organizations
+- **Microsoft Azure AD/Entra** - For Microsoft organizations
+- **Okta** - Commercial solution
+- **Auth0** - Authentication platform
+- **GitLab** - For GitLab integration
 
-#### Настройки безопасности:
-- **PKCE** - защита Authorization Code Flow
-- **Валидация токенов** - проверка подписей и издателей
-- **Маппинг ролей** - автоматическое назначение прав
+#### Security settings:
+- **PKCE** - Authorization Code Flow protection
+- **Token validation** - signature and issuer verification
+- **Role mapping** - automatic permissions assignment
 
-### LDAP аутентификация (`ldap.conf`)
+### LDAP Authentication (`ldap.conf`)
 
-Интеграция с корпоративными каталогами:
+Integration with corporate directories:
 
-#### Поддерживаемые LDAP серверы:
-- **Microsoft Active Directory** - Основная поддержка
-- **OpenLDAP** - Открытое решение
-- **FreeIPA/Red Hat IdM** - Для Linux сред
-- **389 Directory Server** - Red Hat решение
-- **Oracle Internet Directory** - Для Oracle сред
+#### Supported LDAP servers:
+- **Microsoft Active Directory** - Primary support
+- **OpenLDAP** - Open source solution
+- **FreeIPA/Red Hat IdM** - For Linux environments
+- **389 Directory Server** - Red Hat solution
+- **Oracle Internet Directory** - For Oracle environments
 
-#### Возможности:
-- **Группы безопасности** - контроль доступа через группы
-- **Кеширование** - повышение производительности
-- **Пул подключений** - масштабируемость
-- **Резервные серверы** - отказоустойчивость
+#### Features:
+- **Security groups** - access control through groups
+- **Caching** - performance enhancement
+- **Connection pooling** - scalability
+- **Backup servers** - fault tolerance
 
-### Обфускация трафика (`obfuscation.conf`)
+### Traffic Obfuscation (`obfuscation.conf`)
 
-Современные методы обхода блокировок VPN:
+Modern methods for VPN blocking circumvention:
 
-#### Методы обфускации:
-- **XOR Cipher** - простое XOR шифрование
-- **Packet Padding** - изменение размеров пакетов
-- **Timing Obfuscation** - изменение временных характеристик
-- **TLS Tunnel** - маскировка под HTTPS
-- **HTTP Mimicry** - маскировка под веб-трафик
-- **DNS Tunnel** - туннелирование через DNS
+#### Obfuscation methods:
+- **XOR Cipher** - simple XOR encryption
+- **Packet Padding** - packet size modification
+- **Timing Obfuscation** - timing characteristics modification
+- **TLS Tunnel** - HTTPS masquerading
+- **HTTP Mimicry** - web traffic masquerading
+- **DNS Tunnel** - DNS tunneling
 
-#### Региональные профили:
-- **Китай** - оптимизировано для Great Firewall
-- **Иран** - адаптировано для блокировок Ирана
-- **Россия** - настройки для российских ограничений
+#### Regional profiles:
+- **China** - optimized for Great Firewall
+- **Iran** - adapted for Iranian restrictions
+- **Russia** - settings for Russian limitations
 
-## Примеры использования
+## Usage Examples
 
-### Корпоративная сеть с Active Directory
+### Corporate Network with Active Directory
 
 ```conf
 # server.conf
-config ldap.conf
+include ldap.conf
 
 # ldap.conf
 ldap-enabled true
@@ -161,11 +161,11 @@ ldap-bind-dn cn=ldap-reader,ou=service-accounts,dc=company,dc=com
 ldap-required-groups CN=VPN-Users,ou=groups,dc=company,dc=com
 ```
 
-### Организация с Google Workspace
+### Organization with Google Workspace
 
 ```conf
 # server.conf  
-config oidc.conf
+include oidc.conf
 
 # oidc.conf
 oidc-enabled true
@@ -173,12 +173,12 @@ oidc-provider-url https://accounts.google.com
 oidc-required-claims hd:company.com,email_verified:true
 ```
 
-### Высокая безопасность с MFA
+### High Security with MFA
 
 ```conf
 # server.conf
-config auth.conf
-config mfa.conf
+include auth.conf
+include mfa.conf
 
 # mfa.conf
 mfa-enabled true
@@ -187,11 +187,11 @@ mfa-max-attempts 3
 mfa-lockout-duration 1800
 ```
 
-### Обход блокировок
+### Blocking Circumvention
 
 ```conf
 # server.conf
-config obfuscation.conf
+include obfuscation.conf
 
 # obfuscation.conf
 obfuscation-enabled true
@@ -200,108 +200,108 @@ tls-tunnel-port 443
 adaptive-obfuscation-enabled true
 ```
 
-## Безопасность
+## Security
 
-### Рекомендации по безопасности:
+### Security Recommendations:
 
-1. **Используйте сильные алгоритмы**:
-   - Шифрование: AES-256-GCM
-   - Аутентификация: SHA256 или SHA512
-   - TLS: версия 1.2 или выше
+1. **Use strong algorithms**:
+   - Encryption: AES-256-GCM
+   - Authentication: SHA256 or SHA512
+   - TLS: version 1.2 or higher
 
-2. **Настройте правильные права доступа**:
+2. **Set correct access permissions**:
    ```bash
    chmod 600 /etc/govpn/*.conf
    chmod 600 /etc/govpn/certs/*
    chown root:root /etc/govpn/*
    ```
 
-3. **Используйте MFA для критически важных аккаунтов**
+3. **Use MFA for critical accounts**
 
-4. **Регулярно обновляйте сертификаты**
+4. **Regularly update certificates**
 
-5. **Мониторьте логи подключений**
+5. **Monitor connection logs**
 
-### Защита паролей и ключей:
+### Password and Key Protection:
 
-- Все пароли и секретные ключи должны храниться в безопасности
-- Используйте переменные окружения для секретных данных
-- Регулярно меняйте пароли сервисных аккаунтов
+- All passwords and secret keys must be stored securely
+- Use environment variables for secret data
+- Regularly change service account passwords
 
-## Мониторинг и логирование
+## Monitoring and Logging
 
-### Файлы логов:
-- `/var/log/govpn.log` - основные логи сервера
-- `/var/log/govpn-auth.log` - логи аутентификации
-- `/var/log/govpn-mfa.log` - логи MFA
-- `/var/log/govpn-oidc.log` - логи OIDC
-- `/var/log/govpn-ldap.log` - логи LDAP
-- `/var/log/govpn-obfuscation.log` - логи обфускации
+### Log files:
+- `/var/log/govpn.log` - main server logs
+- `/var/log/govpn-auth.log` - authentication logs
+- `/var/log/govpn-mfa.log` - MFA logs
+- `/var/log/govpn-oidc.log` - OIDC logs
+- `/var/log/govpn-ldap.log` - LDAP logs
+- `/var/log/govpn-obfuscation.log` - obfuscation logs
 
-### Метрики:
-Включите сбор метрик для мониторинга:
+### Metrics:
+Enable metrics collection for monitoring:
 ```conf
 obfuscation-metrics-enabled true
 obfuscation-metrics-port 9090
 ```
 
-## Производительность
+## Performance
 
-### Оптимизация для различных нагрузок:
+### Optimization for different loads:
 
-**Малые сети (до 50 пользователей):**
+**Small networks (up to 50 users):**
 ```conf
 max-clients 50
 ldap-connection-pool-size 5
 obfuscation-threads 2
 ```
 
-**Средние сети (до 500 пользователей):**
+**Medium networks (up to 500 users):**
 ```conf
 max-clients 500
 ldap-connection-pool-size 20
 obfuscation-threads 8
 ```
 
-**Большие сети (свыше 500 пользователей):**
+**Large networks (over 500 users):**
 ```conf
 max-clients 1000
 ldap-connection-pool-size 50
 obfuscation-threads 16
 ```
 
-## Устранение неполадок
+## Troubleshooting
 
-### Частые проблемы:
+### Common issues:
 
-1. **Проблемы с LDAP подключением**:
-   - Проверьте сетевую доступность
-   - Убедитесь в правильности bind DN и пароля
-   - Проверьте SSL/TLS настройки
+1. **LDAP connection problems**:
+   - Check network accessibility
+   - Verify bind DN and password correctness
+   - Check SSL/TLS settings
 
-2. **Проблемы с OIDC**:
-   - Проверьте правильность client_id и client_secret
-   - Убедитесь в доступности провайдера
-   - Проверьте redirect URL
+2. **OIDC problems**:
+   - Check client_id and client_secret correctness
+   - Verify provider availability
+   - Check redirect URL
 
-3. **Проблемы с MFA**:
-   - Синхронизируйте время на сервере
-   - Проверьте настройки TOTP (период, алгоритм)
-   - Убедитесь в правильности секретного ключа
+3. **MFA problems**:
+   - Synchronize server time
+   - Check TOTP settings (period, algorithm)
+   - Verify secret key correctness
 
-### Отладка:
-Включите детальное логирование для отладки:
+### Debugging:
+Enable detailed logging for debugging:
 ```conf
-verb 6                          # В основном конфиге
-mfa-log-level debug            # Для MFA
-oidc-log-level debug           # Для OIDC
-ldap-log-level debug           # Для LDAP
+verb 6                          # In main config
+mfa-log-level debug            # For MFA
+oidc-log-level debug           # For OIDC
+ldap-log-level debug           # For LDAP
 ```
 
-## Поддержка
+## Support
 
-Для получения поддержки обратитесь к документации проекта или создайте issue в репозитории.
+For support, refer to project documentation or create an issue in the repository.
 
-## Лицензия
+## License
 
-Конфигурационные файлы распространяются под той же лицензией, что и основной проект GoVPN. 
+Configuration files are distributed under the same license as the main GoVPN project. 

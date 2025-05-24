@@ -1,43 +1,43 @@
 # GoVPN Traffic Obfuscation
 
-Модуль обфускации трафика GoVPN предназначен для обхода блокировок DPI (Deep Packet Inspection) и цензуры в различных регионах мира.
+The GoVPN traffic obfuscation module is designed to bypass DPI (Deep Packet Inspection) blocking and censorship in various regions worldwide.
 
-## Возможности
+## Features
 
-### ✅ Реализованные функции
+### ✅ Implemented Functions
 
-- **XOR Obfuscation** - быстрое XOR шифрование поверх основного шифрования
-- **TLS Tunneling** - инкапсуляция VPN трафика в легитимные TLS соединения
-- **HTTP Mimicry** - маскировка VPN трафика под легитимные HTTP запросы/ответы
-- **Packet Padding** - рандомизация размеров пакетов для анти-статистического анализа
-- **Timing Obfuscation** - изменение временных интервалов между пакетами для маскировки паттернов трафика
-- **Traffic Padding** - добавление фиктивного трафика для маскировки паттернов активности
-- **Flow Watermarking** - добавление скрытых водяных знаков для искажения статистических характеристик
-- **Модульная архитектура** - легко добавлять новые методы обфускации
-- **Автоматическое переключение** - детектор DPI блокировок с автоматическим переключением методов
-- **Региональные профили** - оптимизированные настройки для разных стран (Китай, Иран, Россия)
-- **Метрики производительности** - детальная статистика работы обфускаторов
-- **Адаптивная обфускация** - динамическое переключение при обнаружении блокировки
+- **XOR Obfuscation** - fast XOR encryption on top of main encryption
+- **TLS Tunneling** - encapsulating VPN traffic in legitimate TLS connections
+- **HTTP Mimicry** - masking VPN traffic as legitimate HTTP requests/responses
+- **Packet Padding** - packet size randomization for anti-statistical analysis
+- **Timing Obfuscation** - changing time intervals between packets to mask traffic patterns
+- **Traffic Padding** - adding dummy traffic to mask activity patterns
+- **Flow Watermarking** - adding hidden watermarks to distort statistical characteristics
+- **Modular Architecture** - easy addition of new obfuscation methods
+- **Automatic Switching** - DPI blocking detector with automatic method switching
+- **Regional Profiles** - optimized settings for different countries (China, Iran, Russia)
+- **Performance Metrics** - detailed statistics of obfuscator operation
+- **Adaptive Obfuscation** - dynamic switching when blocking is detected
 
-- **DNS Tunneling** - передача данных через DNS запросы (резервный канал связи)
-- **HTTP Steganography** ✅ - скрытие VPN данных внутри HTTP трафика с использованием стеганографических техник
+- **DNS Tunneling** - data transmission through DNS queries (backup communication channel)
+- **HTTP Steganography** ✅ - hiding VPN data inside HTTP traffic using steganographic techniques
 
-## Быстрый старт
+## Quick Start
 
-### Использование в CLI
+### CLI Usage
 
 ```bash
-# Включить обфускацию с XOR методом
+# Enable obfuscation with XOR method
 ./govpn-server --obfuscation --obfuscation-method=xor_cipher
 
-# Использовать региональный профиль для Китая
+# Use regional profile for China
 ./govpn-server --obfuscation --regional-profile=china
 
-# Указать собственный XOR ключ
+# Specify custom XOR key
 ./govpn-server --obfuscation --xor-key="my-secret-key-123"
 ```
 
-### Программное использование
+### Programmatic Usage
 
 ```go
 package main
@@ -50,7 +50,7 @@ import (
 )
 
 func main() {
-    // Конфигурация обфускации
+    // Obfuscation configuration
     config := &obfuscation.Config{
         EnabledMethods:   []obfuscation.ObfuscationMethod{obfuscation.MethodXORCipher},
         PrimaryMethod:    obfuscation.MethodXORCipher,
@@ -62,21 +62,21 @@ func main() {
         XORKey:          []byte("your-secret-key"),
     }
     
-    // Создание движка обфускации
+    // Create obfuscation engine
     engine, err := obfuscation.NewEngine(config, log.Default())
     if err != nil {
         log.Fatal(err)
     }
     defer engine.Close()
     
-    // Обфускация данных
+    // Data obfuscation
     data := []byte("Sensitive VPN traffic")
     obfuscated, err := engine.ObfuscateData(data)
     if err != nil {
         log.Fatal(err)
     }
     
-    // Деобфускация
+    // Deobfuscation
     deobfuscated, err := engine.DeobfuscateData(obfuscated)
     if err != nil {
         log.Fatal(err)
@@ -86,38 +86,38 @@ func main() {
 }
 ```
 
-## Методы обфускации
+## Obfuscation Methods
 
 ### XOR Cipher
 
-Простой и быстрый метод обфускации с использованием XOR операции.
+Simple and fast obfuscation method using XOR operation.
 
-**Преимущества:**
-- Очень высокая производительность
-- Минимальные накладные расходы
-- Симметричное шифрование
+**Advantages:**
+- Very high performance
+- Minimal overhead
+- Symmetric encryption
 
-**Недостатки:**
-- Относительно простой для анализа
-- Требует безопасного обмена ключами
+**Disadvantages:**
+- Relatively simple to analyze
+- Requires secure key exchange
 
-**Использование:**
+**Usage:**
 ```go
 cipher, err := obfuscation.NewXORCipher([]byte("your-key"), logger)
 ```
 
 ### TLS Tunneling ✅
 
-Инкапсуляция VPN трафика в легитимные TLS соединения.
+Encapsulating VPN traffic in legitimate TLS connections.
 
-**Преимущества:**
-- Выглядит как обычный HTTPS трафик
-- Сложно заблокировать без блокировки всего HTTPS
-- Поддержка SNI и ALPN
-- Автогенерация самоподписанных сертификатов
-- Опциональные поддельные HTTP заголовки
+**Advantages:**
+- Looks like regular HTTPS traffic
+- Difficult to block without blocking all HTTPS
+- SNI and ALPN support
+- Auto-generation of self-signed certificates
+- Optional fake HTTP headers
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.TLSTunnelConfig{
     ServerName:      "secure.example.com",
@@ -127,19 +127,19 @@ config := &obfuscation.TLSTunnelConfig{
 tunnel, err := obfuscation.NewTLSTunnel(config, logger)
 ```
 
-**Документация:** [TLS Tunneling](tls_tunneling.md)
+**Documentation:** [TLS Tunneling](tls_tunneling.md)
 
 ### Packet Padding ✅
 
-Рандомизация размеров пакетов для маскировки статистических характеристик.
+Packet size randomization to mask statistical characteristics.
 
-**Преимущества:**
-- Затрудняет статистический анализ трафика
-- Криптографически стойкие случайные данные
-- Настраиваемые диапазоны padding'а
-- Автоматическое добавление/удаление padding'а
+**Advantages:**
+- Complicates statistical traffic analysis
+- Cryptographically strong random data
+- Configurable padding ranges
+- Automatic padding addition/removal
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.PacketPaddingConfig{
     Enabled:       true,
@@ -150,19 +150,19 @@ config := &obfuscation.PacketPaddingConfig{
 padding, err := obfuscation.NewPacketPadding(config, logger)
 ```
 
-**Документация:** [Packet Padding](packet_padding.md)
+**Documentation:** [Packet Padding](packet_padding.md)
 
 ### Timing Obfuscation ✅
 
-Изменение временных интервалов между пакетами для маскировки паттернов трафика.
+Changing time intervals between packets to mask traffic patterns.
 
-**Преимущества:**
-- Скрывает характерные временные паттерны VPN трафика
-- Использует экспоненциальное распределение для реалистичности
-- Настраиваемые диапазоны задержек (от микросекунд до секунд)
-- Не изменяет содержимое пакетов, только временные интервалы
+**Advantages:**
+- Hides characteristic timing patterns of VPN traffic
+- Uses exponential distribution for realism
+- Configurable delay ranges (from microseconds to seconds)
+- Does not change packet content, only timing intervals
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.TimingObfsConfig{
     Enabled:      true,
@@ -173,19 +173,19 @@ config := &obfuscation.TimingObfsConfig{
 timing, err := obfuscation.NewTimingObfuscation(config, logger)
 ```
 
-**Документация:** [Timing Obfuscation](timing_obfuscation.md)
+**Documentation:** [Timing Obfuscation](timing_obfuscation.md)
 
 ### Traffic Padding ✅
 
-Добавление фиктивного трафика между реальными пакетами для маскировки паттернов активности.
+Adding dummy traffic between real packets to mask activity patterns.
 
-**Преимущества:**
-- Создает постоянный поток трафика для маскировки простоев
-- Поддерживает режим всплесков для имитации реальной активности
-- Адаптивные интервалы в зависимости от активности
-- Автоматическая фильтрация фиктивных пакетов на стороне получателя
+**Advantages:**
+- Creates constant traffic flow to mask idle periods
+- Supports burst mode to simulate real activity
+- Adaptive intervals based on activity
+- Automatic filtering of dummy packets on receiver side
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.TrafficPaddingConfig{
     Enabled:      true,
@@ -200,21 +200,21 @@ config := &obfuscation.TrafficPaddingConfig{
 padding, err := obfuscation.NewTrafficPadding(config, logger)
 ```
 
-**Документация:** [Traffic Padding](traffic_padding.md)
+**Documentation:** [Traffic Padding](traffic_padding.md)
 
 ### Flow Watermarking ✅
 
-Добавление скрытых водяных знаков в поток данных для искажения статистических характеристик.
+Adding hidden watermarks to distort statistical characteristics.
 
-**Преимущества:**
-- Модифицирует статистические характеристики данных, не нарушая целостность
-- Использует криптографические ключи для генерации уникальных паттернов
-- Поддерживает как статистический, так и простой XOR режимы
-- Периодическая ротация паттернов для повышения безопасности
-- Настраиваемые частотные полосы для различных типов трафика
-- Эффективен против корреляционного и частотного анализа
+**Advantages:**
+- Modifies statistical characteristics of data without compromising integrity
+- Uses cryptographic keys to generate unique patterns
+- Supports both statistical and simple XOR modes
+- Periodic pattern rotation for increased security
+- Configurable frequency bands for different traffic types
+- Effective against correlation and frequency analysis
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.FlowWatermarkConfig{
     Enabled:         true,
@@ -229,19 +229,19 @@ config := &obfuscation.FlowWatermarkConfig{
 watermark, err := obfuscation.NewFlowWatermark(config, logger)
 ```
 
-**Документация:** [Flow Watermarking](flow_watermarking.md)
+**Documentation:** [Flow Watermarking](flow_watermarking.md)
 
 ### HTTP Mimicry ✅
 
-Маскировка VPN трафика под обычные HTTP запросы с реалистичными заголовками.
+Masking VPN traffic as legitimate HTTP requests with realistic headers.
 
-**Преимущества:**
-- Имитирует реальные веб-сайты и API запросы
-- Адаптивное кодирование данных (GET/POST методы)
-- Современные User-Agent строки (2024)
-- Поддержка различных HTTP методов и заголовков
+**Advantages:**
+- Mimics real websites and API requests
+- Adaptive data encoding (GET/POST methods)
+- Modern User-Agent strings (2024)
+- Supports various HTTP methods and headers
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.HTTPMimicryConfig{
     UserAgent:     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0",
@@ -252,21 +252,21 @@ config := &obfuscation.HTTPMimicryConfig{
 mimicry, err := obfuscation.NewHTTPMimicry(config, logger)
 ```
 
-**Документация:** [HTTP Mimicry](http_mimicry.md)
+**Documentation:** [HTTP Mimicry](http_mimicry.md)
 
 ### DNS Tunneling ✅
 
-Передача данных через DNS запросы для обеспечения резервного канала связи в экстремально ограниченных сетях.
+Data transmission through DNS queries for providing backup communication channel in extremely restricted networks.
 
-**Преимущества:**
-- Работает через большинство файрволов (DNS трафик редко блокируется полностью)
-- Обходит DPI в ограниченных сетях
-- Поддержка множественных DNS серверов для резервирования
-- Настраиваемые задержки запросов для избежания обнаружения
-- Base32 кодирование для совместимости с DNS
-- Поддержка различных типов DNS записей (A, TXT, CNAME)
+**Advantages:**
+- Works through most firewalls (DNS traffic rarely gets blocked completely)
+- Bypasses DPI in restricted networks
+- Supports multiple DNS servers for reservation
+- Configurable query delays to avoid detection
+- Base32 encoding for compatibility with DNS
+- Supports various types of DNS records (A, TXT, CNAME)
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.DNSTunnelConfig{
     Enabled:        true,
@@ -281,24 +281,24 @@ config := &obfuscation.DNSTunnelConfig{
 tunnel, err := obfuscation.NewDNSTunnel(config, logger)
 ```
 
-**Документация:** [DNS Tunneling](dns_tunneling.md)
+**Documentation:** [DNS Tunneling](dns_tunneling.md)
 
 ### HTTP Steganography ✅
 
-Скрытие VPN данных внутри обычного HTTP трафика с использованием стеганографических техник.
+Hiding VPN data inside regular HTTP traffic using steganographic techniques.
 
-**Преимущества:**
-- Пять различных методов стеганографии для разных сценариев
-- Headers and Body: быстрый для небольших данных (7.5x расширение)
-- Multipart Forms: отличная маскировка под загрузку файлов (13.5x расширение)
-- JSON API: неотличим от API трафика (6.8x расширение)
-- CSS Comments: стеганографически стойкий (9.5x расширение)
-- JavaScript Variables: скрытность в коде приложения (13.1x расширение)
-- Реалистичные HTTP заголовки и структуры
-- Автоматическая проверка целостности данных
-- Настраиваемые веб-сайты и User-Agent для аутентичности
+**Advantages:**
+- Five different methods of steganography for different scenarios
+- Headers and Body: fast for small data (7.5x expansion)
+- Multipart Forms: excellent for file upload masking (13.5x expansion)
+- JSON API: indistinguishable from API traffic (6.8x expansion)
+- CSS Comments: steganographically secure (9.5x expansion)
+- JavaScript Variables: code application hiding (13.1x expansion)
+- Realistic HTTP headers and structures
+- Automatic data integrity check
+- Configurable websites and User-Agent for authenticity
 
-**Использование:**
+**Usage:**
 ```go
 config := &obfuscation.HTTPStegoConfig{
     Enabled:       true,
@@ -315,37 +315,37 @@ config := &obfuscation.HTTPStegoConfig{
 stego, err := obfuscation.NewHTTPSteganography(config, logger)
 ```
 
-**Документация:** [HTTP Steganography](http_steganography.md)
+**Documentation:** [HTTP Steganography](http_steganography.md)
 
-## Региональные профили
+## Regional Profiles
 
-### Китай (china)
+### China (china)
 
-Оптимизирован для обхода Великого Китайского Файрвола:
-- Основной метод: TLS Tunnel
-- Резервные методы: HTTP Mimicry, XOR Cipher
-- Агрессивная обфускация пакетов
-- Быстрое переключение методов (порог: 2 ошибки)
+Optimized for Great Firewall bypass:
+- Primary method: TLS Tunnel
+- Backup methods: HTTP Mimicry, XOR Cipher
+- Aggressive packet obfuscation
+- Quick method switching (threshold: 2 errors)
 
-### Иран (iran)
+### Iran (iran)
 
-Настроен для обхода иранских фильтров:
-- Основной метод: HTTP Mimicry
-- Резервные методы: TLS Tunnel, HTTP Steganography
-- Умеренная обфускация
-- Средний порог переключения (3 ошибки)
+Configured for Iranian filtering:
+- Primary method: HTTP Mimicry
+- Backup methods: TLS Tunnel, HTTP Steganography
+- Moderate obfuscation
+- Medium switching threshold (3 errors)
 
-### Россия (russia)
+### Russia (russia)
 
-Сфокусирован на обходе российских DPI:
-- Основной метод: TLS Tunnel
-- Резервные методы: HTTP Mimicry, Timing Obfuscation
-- Легкая обфускация для сохранения скорости
-- Консервативный порог переключения (4 ошибки)
+Focused on Russian DPI bypass:
+- Primary method: TLS Tunnel
+- Backup methods: HTTP Mimicry, Timing Obfuscation
+- Light obfuscation for speed preservation
+- Conservative switching threshold (4 errors)
 
-## Автоматическое переключение
+## Automatic Switching
 
-Система автоматически обнаруживает блокировки по следующим признакам:
+System automatically detects blockings based on the following signs:
 
 - `connection reset by peer`
 - `connection refused`
@@ -356,38 +356,38 @@ stego, err := obfuscation.NewHTTPSteganography(config, logger)
 - `unexpected EOF`
 - `no route to host`
 
-При обнаружении указанного количества ошибок подряд (настраивается через `SwitchThreshold`), система автоматически переключается на следующий доступный метод из списка `FallbackMethods`.
+When specified number of consecutive errors occur (configurable via `SwitchThreshold`), system automatically switches to next available method from `FallbackMethods`.
 
-## Метрики и мониторинг
+## Performance Metrics and Monitoring
 
-Каждый обфускатор предоставляет детальные метрики:
+Each obfuscator provides detailed metrics:
 
 ```go
 type ObfuscatorMetrics struct {
-    PacketsProcessed int64         // Количество обработанных пакетов
-    BytesProcessed   int64         // Количество обработанных байт
-    Errors           int64         // Количество ошибок
-    AvgProcessTime   time.Duration // Среднее время обработки
-    LastUsed         time.Time     // Время последнего использования
+    PacketsProcessed int64         // Number of processed packets
+    BytesProcessed   int64         // Number of processed bytes
+    Errors           int64         // Number of errors
+    AvgProcessTime   time.Duration // Average processing time
+    LastUsed         time.Time     // Last usage time
 }
 ```
 
-Движок обфускации также предоставляет общие метрики:
+Obfuscation engine also provides general metrics:
 
 ```go
 type EngineMetrics struct {
-    TotalPackets     int64                            // Общее количество пакетов
-    TotalBytes       int64                            // Общее количество байт
-    MethodSwitches   int64                            // Количество переключений методов
-    DetectionEvents  int64                            // Количество событий обнаружения
-    MethodMetrics    map[ObfuscationMethod]*ObfuscatorMetrics // Метрики по методам
-    StartTime        time.Time                        // Время запуска
+    TotalPackets     int64                            // Total number of packets
+    TotalBytes       int64                            // Total number of bytes
+    MethodSwitches   int64                            // Number of method switches
+    DetectionEvents  int64                            // Number of detection events
+    MethodMetrics    map[ObfuscationMethod]*ObfuscatorMetrics // Metrics by methods
+    StartTime        time.Time                        // Start time
 }
 ```
 
-## Производительность
+## Performance
 
-Результаты бенчмарков на Apple M3 Pro:
+Benchmark results on Apple M3 Pro:
 
 ```
 BenchmarkXORObfuscation-12           1000000      1041 ns/op     1408 B/op     1 allocs/op
@@ -401,110 +401,110 @@ BenchmarkHTTPSteganographyObfuscation-12  460210  2566 ns/op    4171 B/op    52 
 BenchmarkDNSTunnelObfuscation-12      470808      2658 ns/op    5291 B/op    48 allocs/op
 ```
 
-### Сравнение производительности методов
+### Comparison of Performance Methods
 
-1. **TLS Tunneling**: Самый быстрый (~86ns/op, 0 аллокаций)
-2. **Traffic Padding**: Очень быстрый (~120ns/op, 0 аллокаций)
-3. **Packet Padding**: Хорошая скорость (~440ns/op, 1 аллокация)
-4. **HTTP Mimicry**: Средняя скорость (~671ns/op, 15 аллокаций)
-5. **XOR Cipher**: Медленный (~1041ns/op, 1 аллокация)
-6. **Flow Watermarking**: Медленный (~1937ns/op, 1 аллокация)
-7. **HTTP Steganography**: Медленный (~2566ns/op, 52 аллокации)
-8. **DNS Tunneling**: Медленный (~2658ns/op, 48 аллокаций)
-9. **Timing Obfuscation**: Самый медленный* (~262μs/op, 0 аллокаций)
+1. **TLS Tunneling**: Fastest (~86ns/op, 0 allocs)
+2. **Traffic Padding**: Very fast (~120ns/op, 0 allocs)
+3. **Packet Padding**: Good speed (~440ns/op, 1 alloc)
+4. **HTTP Mimicry**: Medium speed (~671ns/op, 15 allocs)
+5. **XOR Cipher**: Slow (~1041ns/op, 1 alloc)
+6. **Flow Watermarking**: Slow (~1937ns/op, 1 alloc)
+7. **HTTP Steganography**: Slow (~2566ns/op, 52 allocs)
+8. **DNS Tunneling**: Slow (~2658ns/op, 48 allocs)
+9. **Timing Obfuscation**: Slowest* (~262μs/op, 0 allocs)
 
-*Примечание: Высокое время выполнения для Timing Obfuscation обусловлено намеренными задержками, а не вычислительной сложностью.
+*Note: High execution time for Timing Obfuscation is due to intentional delays, not computational complexity.
 
-## Конфигурация
+## Configuration
 
-### Основные параметры
+### Main Parameters
 
-- `EnabledMethods` - список включенных методов обфускации
-- `PrimaryMethod` - основной метод обфускации
-- `FallbackMethods` - резервные методы для переключения
-- `AutoDetection` - включить автоматическое обнаружение блокировок
-- `SwitchThreshold` - количество ошибок для переключения метода
-- `DetectionTimeout` - таймаут для обнаружения блокировок
-- `RegionalProfile` - региональный профиль (china, iran, russia)
+- `EnabledMethods` - list of enabled obfuscation methods
+- `PrimaryMethod` - primary obfuscation method
+- `FallbackMethods` - backup methods for switching
+- `AutoDetection` - enable blocking detection
+- `SwitchThreshold` - number of errors for method switching
+- `DetectionTimeout` - timeout for blocking detection
+- `RegionalProfile` - regional profile (china, iran, russia)
 
-### Специфичные настройки
+### Specific Settings
 
 #### XOR Cipher
-- `XORKey` - ключ для XOR обфускации (байтовый массив)
+- `XORKey` - key for XOR obfuscation (byte array)
 
 #### TLS Tunnel
-- `ServerName` - имя сервера для SNI
-- `ALPN` - список поддерживаемых протоколов
-- `FakeHTTPHeaders` - добавлять поддельные HTTP заголовки
+- `ServerName` - server name for SNI
+- `ALPN` - list of supported protocols
+- `FakeHTTPHeaders` - add fake HTTP headers
 
 #### Packet Padding
-- `Enabled` - включить/выключить Packet Padding
-- `MinPadding` - минимальное количество байт для добавления
-- `MaxPadding` - максимальное количество байт для добавления  
-- `RandomizeSize` - рандомизировать размер padding'а
+- `Enabled` - enable/disable Packet Padding
+- `MinPadding` - minimum number of bytes to add
+- `MaxPadding` - maximum number of bytes to add  
+- `RandomizeSize` - randomize padding size
 
 #### HTTP Mimicry
-- `UserAgent` - строка User-Agent
-- `FakeHost` - поддельный хост
-- `CustomHeaders` - дополнительные HTTP заголовки
-- `MimicWebsite` - веб-сайт для имитации
+- `UserAgent` - User-Agent string
+- `FakeHost` - fake host
+- `CustomHeaders` - additional HTTP headers
+- `MimicWebsite` - website for mimicry
 
 #### Flow Watermarking
-- `Enabled` - включить/выключить Flow Watermarking
-- `WatermarkKey` - криптографический ключ для генерации водяных знаков
-- `PatternInterval` - интервал обновления паттернов
-- `PatternStrength` - сила водяного знака (0.0-1.0)
-- `NoiseLevel` - уровень шума для рандомизации (0.0-1.0)
-- `RotationPeriod` - период ротации паттернов
-- `StatisticalMode` - использовать статистический или простой XOR режим
-- `FrequencyBands` - частотные полосы для генерации паттернов
+- `Enabled` - enable/disable Flow Watermarking
+- `WatermarkKey` - cryptographic key for watermark generation
+- `PatternInterval` - pattern update interval
+- `PatternStrength` - watermark strength (0.0-1.0)
+- `NoiseLevel` - noise level for randomization (0.0-1.0)
+- `RotationPeriod` - pattern rotation period
+- `StatisticalMode` - use statistical or simple XOR mode
+- `FrequencyBands` - frequency bands for pattern generation
 
-## Примеры использования
+## Usage Examples
 
-### Демонстрация
+### Demonstration
 
-Запустите демонстрацию для просмотра всех возможностей:
+Run demonstration to view all capabilities:
 
 ```bash
 go run examples/obfuscation_demo.go
 ```
 
-### Тестирование
+### Testing
 
-Запустите тесты модуля обфускации:
+Run obfuscation module tests:
 
 ```bash
 go test ./pkg/obfuscation -v
 ```
 
-### Бенчмарки
+### Benchmarks
 
-Запустите бенчмарки производительности:
+Run performance benchmarks:
 
 ```bash
 go test ./pkg/obfuscation -bench=. -v
 ```
 
-## Безопасность
+## Security
 
-### Рекомендации
+### Recommendations
 
-1. **Используйте сильные ключи** - для XOR обфускации используйте случайные ключи длиной не менее 32 байт
-2. **Регулярно меняйте ключи** - периодически обновляйте ключи обфускации
-3. **Комбинируйте методы** - используйте несколько методов обфускации для повышения стойкости
-4. **Мониторьте метрики** - следите за количеством переключений методов и ошибок
+1. **Use Strong Keys** - for XOR obfuscation, use random keys of at least 32 bytes
+2. **Regularly Change Keys** - periodically update obfuscation keys
+3. **Combine Methods** - use multiple obfuscation methods for increased robustness
+4. **Monitor Metrics** - watch method switching and error counts
 
-### Ограничения
+### Limitations
 
-- XOR обфускация не является криптографически стойкой и должна использоваться только поверх основного шифрования VPN
-- Некоторые методы обфускации могут снижать производительность
-- Эффективность обфускации зависит от конкретных методов блокировки в регионе
+- XOR obfuscation is not cryptographically secure and should only be used on top of main encryption VPN
+- Some obfuscation methods may reduce performance
+- Obfuscation effectiveness depends on specific blocking methods in the region
 
-## Разработка
+## Development
 
-### Добавление нового метода обфускации
+### Adding New Obfuscation Method
 
-1. Реализуйте интерфейс `Obfuscator`:
+1. Implement `Obfuscator` interface:
 
 ```go
 type Obfuscator interface {
@@ -517,30 +517,30 @@ type Obfuscator interface {
 }
 ```
 
-2. Добавьте константу метода:
+2. Add method constant:
 
 ```go
 const MethodYourMethod ObfuscationMethod = "your_method"
 ```
 
-3. Добавьте конструктор в `initializeObfuscators()`:
+3. Add constructor in `initializeObfuscators()`:
 
 ```go
 case MethodYourMethod:
     obfuscator, err = NewYourMethod(&e.config.YourMethodConfig, e.logger)
 ```
 
-4. Добавьте тесты в `obfuscation_test.go`
+4. Add tests in `obfuscation_test.go`
 
-### Структура проекта
+### Project Structure
 
 ```
 pkg/obfuscation/
-├── obfuscation.go      # Основной модуль с движком и XOR обфускатором
-├── obfuscation_test.go # Тесты модуля обфускации
-└── README.md           # Документация (этот файл)
+├── obfuscation.go      # Main module with engine and XOR obfuscator
+├── obfuscation_test.go # Obfuscation module tests
+└── README.md           # Documentation (this file)
 ```
 
-## Лицензия
+## License
 
-Этот модуль является частью проекта GoVPN и распространяется под той же лицензией. 
+This module is part of GoVPN project and distributed under the same license. 
