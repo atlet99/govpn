@@ -18,7 +18,6 @@ import (
 
 	"github.com/atlet99/govpn/pkg/compat"
 	"github.com/atlet99/govpn/pkg/core"
-	"github.com/atlet99/govpn/pkg/obfuscation"
 	"github.com/atlet99/govpn/pkg/server"
 )
 
@@ -688,60 +687,6 @@ func dumpStats() {
 // getVersion returns the current version of the application
 func getVersion() string {
 	return "0.1.0"
-}
-
-// testObfuscationEngine tests the obfuscation engine
-func testObfuscationEngine(config *core.Config) error {
-	log.Println("Testing obfuscation engine...")
-
-	// Create obfuscation configuration
-	obfConfig := &obfuscation.Config{
-		EnabledMethods:   []obfuscation.ObfuscationMethod{obfuscation.ObfuscationMethod(config.PrimaryObfuscation)},
-		PrimaryMethod:    obfuscation.ObfuscationMethod(config.PrimaryObfuscation),
-		FallbackMethods:  []obfuscation.ObfuscationMethod{},
-		AutoDetection:    config.ObfuscationAutoDetect,
-		SwitchThreshold:  3,
-		DetectionTimeout: 5 * time.Second,
-		RegionalProfile:  config.RegionalProfile,
-	}
-
-	// Add XOR key if specified
-	if config.XORKey != "" {
-		obfConfig.XORKey = []byte(config.XORKey)
-	}
-
-	// Create obfuscation engine
-	engine, err := obfuscation.NewEngine(obfConfig, log.New(os.Stdout, "[OBFUSCATION] ", log.LstdFlags))
-	if err != nil {
-		return fmt.Errorf("failed to create obfuscation engine: %w", err)
-	}
-	defer engine.Close()
-
-	// Test obfuscation
-	testData := []byte("Hello, GoVPN! This is a test message for traffic obfuscation.")
-
-	obfuscated, err := engine.ObfuscateData(testData)
-	if err != nil {
-		return fmt.Errorf("failed to obfuscate test data: %w", err)
-	}
-
-	deobfuscated, err := engine.DeobfuscateData(obfuscated)
-	if err != nil {
-		return fmt.Errorf("failed to deobfuscate test data: %w", err)
-	}
-
-	if string(testData) != string(deobfuscated) {
-		return fmt.Errorf("obfuscation round-trip failed: original != deobfuscated")
-	}
-
-	// Get metrics
-	metrics := engine.GetMetrics()
-	log.Printf("Obfuscation test successful:")
-	log.Printf("  Current method: %s", engine.GetCurrentMethod())
-	log.Printf("  Total packets: %d", metrics.TotalPackets)
-	log.Printf("  Total bytes: %d", metrics.TotalBytes)
-
-	return nil
 }
 
 // convertToCIDR converts IP address and subnet mask to CIDR notation

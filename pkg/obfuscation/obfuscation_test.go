@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"log"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -564,6 +565,211 @@ func BenchmarkTLSTunnelObfuscation(b *testing.B) {
 		_, err := tunnel.Obfuscate(testData)
 		if err != nil {
 			b.Fatalf("TLS obfuscation failed: %v", err)
+		}
+	}
+}
+
+func TestHTTPMimicry(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &HTTPMimicryConfig{
+		UserAgent:     "Mozilla/5.0 (Test Browser)",
+		FakeHost:      "api.example.com",
+		CustomHeaders: map[string]string{"X-API-Key": "test-key-123"},
+		MimicWebsite:  "https://api.example.com",
+	}
+
+	mimicry, err := NewHTTPMimicry(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP mimicry: %v", err)
+	}
+
+	if mimicry.Name() != MethodHTTPMimicry {
+		t.Errorf("Expected method name %s, got %s", MethodHTTPMimicry, mimicry.Name())
+	}
+
+	if !mimicry.IsAvailable() {
+		t.Error("HTTP mimicry should be available")
+	}
+
+	// Test data obfuscation with HTTP mimicry
+	testData := []byte("Secret VPN data that needs to be disguised as HTTP traffic")
+
+	obfuscated, err := mimicry.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	// Obfuscated data should be larger due to HTTP headers
+	if len(obfuscated) <= len(testData) {
+		t.Errorf("Expected obfuscated data to be larger than original, got %d <= %d", len(obfuscated), len(testData))
+	}
+
+	// Check that obfuscated data looks like HTTP
+	obfuscatedStr := string(obfuscated)
+	if !strings.Contains(obfuscatedStr, "HTTP/1.1") && !strings.Contains(obfuscatedStr, "Host:") {
+		t.Error("Obfuscated data should contain HTTP headers")
+	}
+
+	// Deobfuscation should restore original data
+	deobfuscated, err := mimicry.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("HTTP mimicry round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check metrics
+	metrics := mimicry.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+}
+
+func TestHTTPMimicryDefaultConfig(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	// Test with nil config to check defaults
+	mimicry, err := NewHTTPMimicry(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP mimicry with default config: %v", err)
+	}
+
+	// Test that HTTP mimicry works with defaults
+	testData := []byte("Default config test for HTTP mimicry")
+
+	obfuscated, err := mimicry.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate with default config: %v", err)
+	}
+
+	deobfuscated, err := mimicry.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate with default config: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Default config round-trip failed")
+	}
+}
+
+func TestHTTPMimicryDifferentSizes(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	mimicry, err := NewHTTPMimicry(nil, logger)
+	if err != nil {
+		t.Fatalf("Failed to create HTTP mimicry: %v", err)
+	}
+
+	// Test different data sizes to trigger different HTTP structures
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"Small data", []byte("Hi")},
+		{"Medium data", []byte("This is a medium-sized test packet for HTTP mimicry")},
+		{"Large data", bytes.Repeat([]byte("Large test data "), 100)}, // ~1.6KB
+		{"Empty data", []byte{}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			obfuscated, err := mimicry.Obfuscate(tc.data)
+			if err != nil {
+				t.Fatalf("Failed to obfuscate %s: %v", tc.name, err)
+			}
+
+			deobfuscated, err := mimicry.Deobfuscate(obfuscated)
+			if err != nil {
+				t.Fatalf("Failed to deobfuscate %s: %v", tc.name, err)
+			}
+
+			if !bytes.Equal(tc.data, deobfuscated) {
+				t.Errorf("%s round-trip failed", tc.name)
+			}
+		})
+	}
+}
+
+func TestEngineWithHTTPMimicry(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &Config{
+		EnabledMethods:  []ObfuscationMethod{MethodHTTPMimicry},
+		PrimaryMethod:   MethodHTTPMimicry,
+		FallbackMethods: []ObfuscationMethod{},
+		AutoDetection:   false,
+		HTTPMimicry: HTTPMimicryConfig{
+			UserAgent:     "Mozilla/5.0 (Engine Test)",
+			FakeHost:      "secure.api.com",
+			CustomHeaders: map[string]string{"Authorization": "Bearer test-token"},
+			MimicWebsite:  "https://secure.api.com",
+		},
+	}
+
+	engine, err := NewEngine(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create engine with HTTP mimicry: %v", err)
+	}
+	defer engine.Close()
+
+	// Check current method
+	if engine.GetCurrentMethod() != MethodHTTPMimicry {
+		t.Errorf("Expected current method %s, got %s", MethodHTTPMimicry, engine.GetCurrentMethod())
+	}
+
+	// Test data obfuscation through engine
+	testData := []byte("Engine HTTP mimicry test data")
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data through engine: %v", err)
+	}
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data through engine: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Engine HTTP mimicry round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Check engine metrics
+	metrics := engine.GetMetrics()
+	if metrics.TotalPackets != 2 {
+		t.Errorf("Expected 2 total packets, got %d", metrics.TotalPackets)
+	}
+}
+
+func BenchmarkHTTPMimicryObfuscation(b *testing.B) {
+	logger := log.New(os.Stderr, "[BENCH] ", log.LstdFlags)
+
+	config := &HTTPMimicryConfig{
+		UserAgent:     "Mozilla/5.0 (Benchmark)",
+		FakeHost:      "api.benchmark.com",
+		CustomHeaders: map[string]string{},
+		MimicWebsite:  "",
+	}
+
+	mimicry, err := NewHTTPMimicry(config, logger)
+	if err != nil {
+		b.Fatalf("Failed to create HTTP mimicry: %v", err)
+	}
+
+	testData := bytes.Repeat([]byte("HTTP mimicry bench "), 100) // ~1.9KB
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_, err := mimicry.Obfuscate(testData)
+		if err != nil {
+			b.Fatalf("HTTP mimicry obfuscation failed: %v", err)
 		}
 	}
 }

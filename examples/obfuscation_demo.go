@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/atlet99/govpn/pkg/obfuscation"
@@ -47,8 +48,14 @@ func main() {
 	demoPacketPadding(logger)
 	fmt.Println()
 
+	// HTTP Mimicry demonstration
+	fmt.Println("6. HTTP Mimicry Demo")
+	fmt.Println("--------------------")
+	demoHTTPMimicry(logger)
+	fmt.Println()
+
 	// Auto-switching demonstration
-	fmt.Println("6. Auto-switching Demo")
+	fmt.Println("7. Auto-switching Demo")
 	fmt.Println("----------------------")
 	demoAutoSwitching(logger)
 	fmt.Println()
@@ -390,6 +397,133 @@ func demoPacketPadding(logger *log.Logger) {
 	paddingMetrics := padding.GetMetrics()
 	fmt.Printf("Direct padding metrics: %d packets, %d bytes processed\n",
 		paddingMetrics.PacketsProcessed, paddingMetrics.BytesProcessed)
+}
+
+func demoHTTPMimicry(logger *log.Logger) {
+	// Create HTTP mimicry configuration
+	config := &obfuscation.Config{
+		EnabledMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodHTTPMimicry},
+		PrimaryMethod:   obfuscation.MethodHTTPMimicry,
+		FallbackMethods: []obfuscation.ObfuscationMethod{},
+		AutoDetection:   false,
+		HTTPMimicry: obfuscation.HTTPMimicryConfig{
+			UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+			FakeHost:  "api.github.com",
+			CustomHeaders: map[string]string{
+				"Authorization":        "Bearer ghp_example123456789",
+				"X-GitHub-Api-Version": "2022-11-28",
+			},
+			MimicWebsite: "https://api.github.com",
+		},
+	}
+
+	// Create engine with HTTP mimicry
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create HTTP mimicry engine: %v", err)
+	}
+	defer engine.Close()
+
+	fmt.Printf("HTTP Mimicry method: %s\n", engine.GetCurrentMethod())
+	fmt.Printf("Fake host: %s\n", config.HTTPMimicry.FakeHost)
+	fmt.Printf("Custom headers: %v\n", config.HTTPMimicry.CustomHeaders)
+
+	// Test different types of data to show HTTP request/response patterns
+	testCases := []struct {
+		name string
+		data []byte
+	}{
+		{"User login", []byte(`{"username":"alice","password":"secret123","remember_me":true}`)},
+		{"API request", []byte(`{"query":"mutation { createIssue(input: {title: \"Bug report\"}) { id } }"}`)},
+		{"File content", []byte("GET /repos/user/repo/contents/README.md HTTP/1.1\r\nHost: api.github.com")},
+		{"Small data", []byte("ping")},
+		{"Large payload", bytes.Repeat([]byte("Large encrypted VPN payload chunk "), 20)}, // ~680 bytes
+	}
+
+	for _, tc := range testCases {
+		fmt.Printf("\nTesting %s:\n", tc.name)
+		fmt.Printf("Original data size: %d bytes\n", len(tc.data))
+
+		// Obfuscate with HTTP mimicry
+		obfuscated, err := engine.ObfuscateData(tc.data)
+		if err != nil {
+			log.Printf("Failed to obfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("HTTP packet size: %d bytes\n", len(obfuscated))
+
+		// Show partial HTTP structure (first few lines)
+		obfuscatedStr := string(obfuscated)
+		lines := strings.Split(obfuscatedStr, "\r\n")
+		fmt.Printf("HTTP structure preview:\n")
+		for i, line := range lines {
+			if i >= 5 || line == "" { // Show first 5 lines or until empty line
+				if line == "" {
+					fmt.Printf("  [HTTP body follows...]\n")
+				}
+				break
+			}
+			fmt.Printf("  %s\n", line)
+		}
+
+		// Deobfuscate
+		deobfuscated, err := engine.DeobfuscateData(obfuscated)
+		if err != nil {
+			log.Printf("Failed to deobfuscate %s: %v", tc.name, err)
+			continue
+		}
+
+		fmt.Printf("Restored data size: %d bytes\n", len(deobfuscated))
+		fmt.Printf("Round-trip success: %v\n", bytes.Equal(tc.data, deobfuscated))
+
+		// Show size overhead ratio
+		ratio := float64(len(obfuscated)) / float64(len(tc.data))
+		fmt.Printf("Size overhead: %.2fx\n", ratio)
+	}
+
+	// Show HTTP mimicry metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\nHTTP Mimicry metrics:\n")
+	fmt.Printf("- Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("- Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("- Method switches: %d\n", metrics.MethodSwitches)
+
+	// Test the actual HTTP mimicry obfuscator directly
+	fmt.Printf("\nDirect HTTP Mimicry test:\n")
+	httpConfig := &obfuscation.HTTPMimicryConfig{
+		UserAgent:     "GoVPN/1.0 (Direct Test)",
+		FakeHost:      "postman-echo.com",
+		CustomHeaders: map[string]string{"X-Test": "direct-mode"},
+		MimicWebsite:  "https://postman-echo.com/post",
+	}
+
+	mimicry, err := obfuscation.NewHTTPMimicry(httpConfig, logger)
+	if err != nil {
+		log.Printf("Failed to create direct HTTP mimicry: %v", err)
+		return
+	}
+
+	directData := []byte("Direct HTTP mimicry test with realistic data")
+	obfuscated, err := mimicry.Obfuscate(directData)
+	if err != nil {
+		log.Printf("Direct obfuscation failed: %v", err)
+		return
+	}
+
+	deobfuscated, err := mimicry.Deobfuscate(obfuscated)
+	if err != nil {
+		log.Printf("Direct deobfuscation failed: %v", err)
+		return
+	}
+
+	fmt.Printf("Direct test successful: %v\n", bytes.Equal(directData, deobfuscated))
+	fmt.Printf("Direct HTTP packet size: %d bytes\n", len(obfuscated))
+
+	// Show HTTP mimicry metrics
+	httpMetrics := mimicry.GetMetrics()
+	fmt.Printf("Direct HTTP metrics: %d packets, %d bytes processed\n",
+		httpMetrics.PacketsProcessed, httpMetrics.BytesProcessed)
 }
 
 func demoAutoSwitching(logger *log.Logger) {

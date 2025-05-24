@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
@@ -320,7 +321,6 @@ type TLSTunnel struct {
 	mu      sync.RWMutex
 	logger  *log.Logger
 	cert    tls.Certificate
-	rootCAs *x509.CertPool
 }
 
 func NewTLSTunnel(config *TLSTunnelConfig, logger *log.Logger) (Obfuscator, error) {
@@ -496,8 +496,428 @@ func (c *tlsTunnelConn) Write(b []byte) (n int, err error) {
 	return c.Conn.Write(b)
 }
 
+// HTTPMimicry disguises VPN traffic as legitimate HTTP requests/responses
+type HTTPMimicry struct {
+	config       *HTTPMimicryConfig
+	metrics      ObfuscatorMetrics
+	mu           sync.RWMutex
+	logger       *log.Logger
+	userAgents   []string
+	commonHosts  []string
+	httpMethods  []string
+	contentTypes []string
+}
+
 func NewHTTPMimicry(config *HTTPMimicryConfig, logger *log.Logger) (Obfuscator, error) {
-	return &stubObfuscator{name: MethodHTTPMimicry, logger: logger}, nil
+	if logger == nil {
+		logger = log.New(io.Discard, "", 0)
+	}
+
+	if config == nil {
+		config = &HTTPMimicryConfig{
+			UserAgent:     "",
+			FakeHost:      "",
+			CustomHeaders: make(map[string]string),
+			MimicWebsite:  "",
+		}
+	}
+
+	mimicry := &HTTPMimicry{
+		config: config,
+		logger: logger,
+		// Realistic User-Agent strings from popular browsers (2024 updated)
+		userAgents: []string{
+			// Windows Desktop - Chrome
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+			// Windows Desktop - Edge
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/120.0.2210.144",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+			// Windows Desktop - Firefox
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+			// macOS Desktop - Chrome
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+			// macOS Desktop - Safari
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+			// macOS Desktop - Firefox
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 14.3; rv:122.0) Gecko/20100101 Firefox/122.0",
+			// Linux Desktop - Chrome
+			"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+			// Linux Desktop - Firefox
+			"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
+			"Mozilla/5.0 (X11; Fedora; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0",
+			// Mobile Android - Chrome
+			"Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36",
+			"Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36",
+			// Mobile Android - Samsung Browser
+			"Mozilla/5.0 (Linux; Android 14; SAMSUNG SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.36",
+			// Mobile iOS - Safari
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+			// Mobile iOS - Chrome
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 17_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/121.0.6167.66 Mobile/15E148 Safari/604.1",
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/121.0.6167.66 Mobile/15E148 Safari/604.1",
+		},
+		// Common legitimate hostnames
+		commonHosts: []string{
+			"api.github.com",
+			"www.googleapis.com",
+			"cdn.jsdelivr.net",
+			"fonts.googleapis.com",
+			"ajax.googleapis.com",
+			"api.openweathermap.org",
+			"jsonplaceholder.typicode.com",
+			"httpbin.org",
+			"www.httpbin.org",
+			"postman-echo.com",
+		},
+		// HTTP methods for different request types
+		httpMethods: []string{
+			"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS",
+		},
+		// Common content types
+		contentTypes: []string{
+			"application/json",
+			"application/x-www-form-urlencoded",
+			"text/html; charset=utf-8",
+			"text/plain; charset=utf-8",
+			"application/javascript",
+			"text/css",
+			"image/png",
+			"image/jpeg",
+		},
+	}
+
+	return mimicry, nil
+}
+
+func (h *HTTPMimicry) Name() ObfuscationMethod {
+	return MethodHTTPMimicry
+}
+
+func (h *HTTPMimicry) Obfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		h.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if len(data) == 0 {
+		return data, nil
+	}
+
+	// Create HTTP request/response structure to disguise VPN data
+	httpPacket := h.createHTTPPacket(data)
+	return httpPacket, nil
+}
+
+func (h *HTTPMimicry) Deobfuscate(data []byte) ([]byte, error) {
+	start := time.Now()
+	defer func() {
+		h.updateMetrics(len(data), time.Since(start), nil)
+	}()
+
+	if len(data) == 0 {
+		return data, nil
+	}
+
+	// Extract original VPN data from HTTP packet
+	return h.extractVPNData(data)
+}
+
+func (h *HTTPMimicry) WrapConn(conn net.Conn) (net.Conn, error) {
+	return &httpMimicryConn{
+		Conn:    conn,
+		mimicry: h,
+	}, nil
+}
+
+func (h *HTTPMimicry) IsAvailable() bool {
+	return true
+}
+
+func (h *HTTPMimicry) GetMetrics() ObfuscatorMetrics {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.metrics
+}
+
+func (h *HTTPMimicry) updateMetrics(dataSize int, processingTime time.Duration, err error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	h.metrics.PacketsProcessed++
+	h.metrics.BytesProcessed += int64(dataSize)
+	h.metrics.LastUsed = time.Now()
+
+	if err != nil {
+		h.metrics.Errors++
+	}
+
+	// Update average processing time
+	if h.metrics.AvgProcessTime == 0 {
+		h.metrics.AvgProcessTime = processingTime
+	} else {
+		h.metrics.AvgProcessTime = (h.metrics.AvgProcessTime + processingTime) / 2
+	}
+}
+
+// createHTTPPacket wraps VPN data in a realistic HTTP request/response
+func (h *HTTPMimicry) createHTTPPacket(vpnData []byte) []byte {
+	// Determine if this should be a request or response (alternate based on data size)
+	isRequest := len(vpnData)%2 == 0
+
+	var httpPacket []byte
+	if isRequest {
+		httpPacket = h.createHTTPRequest(vpnData)
+	} else {
+		httpPacket = h.createHTTPResponse(vpnData)
+	}
+
+	return httpPacket
+}
+
+// createHTTPRequest creates a realistic HTTP request with VPN data as body
+func (h *HTTPMimicry) createHTTPRequest(vpnData []byte) []byte {
+	// Select random method and host
+	method := h.httpMethods[mathrand.Intn(len(h.httpMethods))]
+
+	var host string
+	if h.config.FakeHost != "" {
+		host = h.config.FakeHost
+	} else {
+		host = h.commonHosts[mathrand.Intn(len(h.commonHosts))]
+	}
+
+	// Generate realistic URL path
+	paths := []string{"/api/v1/data", "/api/users", "/search", "/graphql", "/rest/api/2/issue", "/v1/chat/completions"}
+	path := paths[mathrand.Intn(len(paths))]
+
+	// Select User-Agent
+	var userAgent string
+	if h.config.UserAgent != "" {
+		userAgent = h.config.UserAgent
+	} else {
+		userAgent = h.userAgents[mathrand.Intn(len(h.userAgents))]
+	}
+
+	// Build HTTP request
+	var request strings.Builder
+	request.WriteString(fmt.Sprintf("%s %s HTTP/1.1\r\n", method, path))
+	request.WriteString(fmt.Sprintf("Host: %s\r\n", host))
+	request.WriteString(fmt.Sprintf("User-Agent: %s\r\n", userAgent))
+	request.WriteString("Accept: application/json, text/plain, */*\r\n")
+	request.WriteString("Accept-Language: en-US,en;q=0.9\r\n")
+	request.WriteString("Accept-Encoding: gzip, deflate, br\r\n")
+	request.WriteString("Connection: keep-alive\r\n")
+
+	// Add custom headers if configured
+	for key, value := range h.config.CustomHeaders {
+		request.WriteString(fmt.Sprintf("%s: %s\r\n", key, value))
+	}
+
+	// Add realistic headers for POST/PUT requests
+	if method == "POST" || method == "PUT" || method == "PATCH" {
+		contentType := h.contentTypes[mathrand.Intn(len(h.contentTypes))]
+		request.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
+		request.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(vpnData)))
+	}
+
+	request.WriteString("\r\n")
+
+	// Add VPN data as HTTP body (for POST/PUT requests)
+	result := []byte(request.String())
+	if method == "POST" || method == "PUT" || method == "PATCH" {
+		result = append(result, vpnData...)
+	} else {
+		// For GET requests, encode VPN data in headers or URL parameters
+		result = h.encodeDataInHeaders(result, vpnData)
+	}
+
+	return result
+}
+
+// createHTTPResponse creates a realistic HTTP response with VPN data as body
+func (h *HTTPMimicry) createHTTPResponse(vpnData []byte) []byte {
+	// Generate realistic status codes
+	statusCodes := []int{200, 201, 202, 204, 301, 302, 304, 400, 401, 404, 500, 502}
+	statusCode := statusCodes[mathrand.Intn(len(statusCodes))]
+
+	statusText := map[int]string{
+		200: "OK", 201: "Created", 202: "Accepted", 204: "No Content",
+		301: "Moved Permanently", 302: "Found", 304: "Not Modified",
+		400: "Bad Request", 401: "Unauthorized", 404: "Not Found",
+		500: "Internal Server Error", 502: "Bad Gateway",
+	}
+
+	var response strings.Builder
+	response.WriteString(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, statusText[statusCode]))
+	response.WriteString("Server: nginx/1.20.2\r\n")
+	response.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().UTC().Format("Mon, 02 Jan 2006 15:04:05 GMT")))
+
+	// Add realistic content type
+	contentType := h.contentTypes[mathrand.Intn(len(h.contentTypes))]
+	response.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
+	response.WriteString(fmt.Sprintf("Content-Length: %d\r\n", len(vpnData)))
+
+	// Add common response headers
+	response.WriteString("Cache-Control: no-cache, private\r\n")
+	response.WriteString("X-Content-Type-Options: nosniff\r\n")
+	response.WriteString("X-Frame-Options: DENY\r\n")
+	response.WriteString("X-XSS-Protection: 1; mode=block\r\n")
+	response.WriteString("Connection: keep-alive\r\n")
+
+	response.WriteString("\r\n")
+
+	// Add VPN data as response body
+	result := []byte(response.String())
+	result = append(result, vpnData...)
+
+	return result
+}
+
+// encodeDataInHeaders encodes small amounts of VPN data in HTTP headers for GET requests
+func (h *HTTPMimicry) encodeDataInHeaders(httpData []byte, vpnData []byte) []byte {
+	if len(vpnData) > 1024 { // Too large for headers, return as-is
+		return append(httpData, vpnData...)
+	}
+
+	// Encode VPN data as base64 and split into multiple headers
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(vpnData)))
+	base64.StdEncoding.Encode(encoded, vpnData)
+
+	// Split encoded data into chunks and add as custom headers
+	headerTemplate := "X-Request-ID: %s\r\nX-Trace-ID: %s\r\nX-Session-Token: %s\r\n\r\n"
+
+	// Split into 3 parts for different headers
+	chunkSize := len(encoded) / 3
+	if chunkSize == 0 {
+		chunkSize = len(encoded)
+	}
+
+	var chunk1, chunk2, chunk3 string
+	if len(encoded) > 0 {
+		end1 := chunkSize
+		if end1 > len(encoded) {
+			end1 = len(encoded)
+		}
+		chunk1 = string(encoded[:end1])
+
+		if len(encoded) > chunkSize {
+			end2 := chunkSize * 2
+			if end2 > len(encoded) {
+				end2 = len(encoded)
+			}
+			chunk2 = string(encoded[chunkSize:end2])
+
+			if len(encoded) > chunkSize*2 {
+				chunk3 = string(encoded[chunkSize*2:])
+			}
+		}
+	}
+
+	headerData := fmt.Sprintf(headerTemplate, chunk1, chunk2, chunk3)
+	return []byte(strings.Replace(string(httpData), "\r\n\r\n", "\r\n"+headerData, 1))
+}
+
+// extractVPNData extracts original VPN data from HTTP packet
+func (h *HTTPMimicry) extractVPNData(httpData []byte) ([]byte, error) {
+	dataStr := string(httpData)
+
+	// Find the HTTP headers/body separator
+	separatorIndex := strings.Index(dataStr, "\r\n\r\n")
+	if separatorIndex == -1 {
+		return httpData, fmt.Errorf("invalid HTTP packet format")
+	}
+
+	headers := dataStr[:separatorIndex]
+	body := dataStr[separatorIndex+4:]
+
+	// Check if data is encoded in headers (for GET requests)
+	if h.isEncodedInHeaders(headers) {
+		return h.extractFromHeaders(headers)
+	}
+
+	// Otherwise, VPN data is in the body
+	return []byte(body), nil
+}
+
+// isEncodedInHeaders checks if VPN data is encoded in custom headers
+func (h *HTTPMimicry) isEncodedInHeaders(headers string) bool {
+	return strings.Contains(headers, "X-Request-ID:") &&
+		strings.Contains(headers, "X-Trace-ID:") &&
+		strings.Contains(headers, "X-Session-Token:")
+}
+
+// extractFromHeaders extracts and decodes VPN data from custom headers
+func (h *HTTPMimicry) extractFromHeaders(headers string) ([]byte, error) {
+	lines := strings.Split(headers, "\r\n")
+	var chunk1, chunk2, chunk3 string
+
+	for _, line := range lines {
+		if strings.HasPrefix(line, "X-Request-ID:") {
+			chunk1 = strings.TrimSpace(strings.TrimPrefix(line, "X-Request-ID:"))
+		} else if strings.HasPrefix(line, "X-Trace-ID:") {
+			chunk2 = strings.TrimSpace(strings.TrimPrefix(line, "X-Trace-ID:"))
+		} else if strings.HasPrefix(line, "X-Session-Token:") {
+			chunk3 = strings.TrimSpace(strings.TrimPrefix(line, "X-Session-Token:"))
+		}
+	}
+
+	// Reconstruct base64 encoded data
+	encoded := chunk1 + chunk2 + chunk3
+	if encoded == "" {
+		return []byte{}, nil
+	}
+
+	// Decode from base64
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode VPN data from headers: %w", err)
+	}
+
+	return decoded, nil
+}
+
+// httpMimicryConn wraps a connection with HTTP mimicry
+type httpMimicryConn struct {
+	net.Conn
+	mimicry *HTTPMimicry
+}
+
+func (c *httpMimicryConn) Read(b []byte) (n int, err error) {
+	n, err = c.Conn.Read(b)
+	if err != nil || n == 0 {
+		return n, err
+	}
+
+	deobfuscated, deobfErr := c.mimicry.Deobfuscate(b[:n])
+	if deobfErr != nil {
+		return n, deobfErr
+	}
+
+	copy(b, deobfuscated)
+	return len(deobfuscated), nil
+}
+
+func (c *httpMimicryConn) Write(b []byte) (n int, err error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	obfuscated, obfErr := c.mimicry.Obfuscate(b)
+	if obfErr != nil {
+		return 0, obfErr
+	}
+
+	_, err = c.Conn.Write(obfuscated)
+	if err != nil {
+		return 0, err
+	}
+
+	// Return the number of original bytes written
+	return len(b), nil
 }
 
 // PacketPadding packet size randomization obfuscator

@@ -408,7 +408,7 @@ func TestMemoryUsage(t *testing.T) {
 
 	for i := range buffers {
 		buffers[i] = make([]byte, 1500)
-		rand.Read(buffers[i])
+		_, _ = rand.Read(buffers[i])
 	}
 
 	// Process data
@@ -436,7 +436,7 @@ func BenchmarkDataProcessing(b *testing.B) {
 	for _, size := range testSizes {
 		b.Run(fmt.Sprintf("Size%d", size), func(b *testing.B) {
 			data := make([]byte, size)
-			rand.Read(data)
+			_, _ = rand.Read(data)
 
 			b.SetBytes(int64(size))
 			b.ResetTimer()
@@ -506,7 +506,7 @@ func BenchmarkBufferReuse(b *testing.B) {
 // BenchmarkConcurrentProcessing tests concurrent processing performance
 func BenchmarkConcurrentProcessing(b *testing.B) {
 	data := make([]byte, 1024)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -531,7 +531,7 @@ func TestPerformanceMetrics(t *testing.T) {
 
 	// Simulate some work
 	data := make([]byte, 10000)
-	rand.Read(data)
+	_, _ = rand.Read(data)
 
 	for i := 0; i < 1000; i++ {
 		// Process data
@@ -562,7 +562,7 @@ func TestThroughput(t *testing.T) {
 
 	for i := 0; i < numPackets; i++ {
 		packet := make([]byte, packetSize)
-		rand.Read(packet)
+		_, _ = rand.Read(packet)
 
 		// Simulate packet processing
 		for j := range packet {
