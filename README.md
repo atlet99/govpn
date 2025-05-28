@@ -116,7 +116,7 @@ cd govpn
 # Build the server
 go build -o govpn-server ./cmd/server
 
-# Build the client  
+# Build the client
 go build -o govpn-client ./cmd/client
 ```
 
@@ -463,7 +463,7 @@ We welcome contributors! Please:
 
 ## License
 
-GoVPN is distributed under the [MIT](./LICENSE) license.
+GoVPN is distributed under the [MIT](./LICENSE) license. 
 
 ---
 

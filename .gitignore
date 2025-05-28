@@ -55,3 +55,7 @@ ta.key
 .DS_Store
 .AppleDouble
 .LSOverride 
+
+# Node modules
+*/node_modules/
+*/dist/
