@@ -55,7 +55,9 @@
       "hoursAgo": "{{count}} часов назад",
       "daysAgo": "{{count}} дней назад",
       "weeksAgo": "{{count}} недель назад"
-    }
+    },
+    "loadError": "Не удалось загрузить данные. Пожалуйста, попробуйте снова.",
+    "never": "Никогда"
   },
   "navigation": {
     "dashboard": "Панель управления",
@@ -125,23 +127,37 @@
   },
   "users": {
     "title": "Управление пользователями",
-    "createUser": "Создать пользователя",
+    "addUser": "Добавить пользователя",
     "editUser": "Редактировать пользователя",
+    "createUser": "Создать пользователя",
     "deleteUser": "Удалить пользователя",
     "username": "Имя пользователя",
-    "email": "Email",
+    "email": "Электронная почта",
+    "password": "Пароль",
     "role": "Роль",
     "lastLogin": "Последний вход",
     "createdAt": "Создан",
+    "totalUsers": "Всего пользователей",
+    "activeUsers": "Активные пользователи",
+    "inactiveUsers": "Неактивные пользователи",
+    "suspendedUsers": "Заблокированные пользователи",
+    "createSuccess": "Пользователь успешно создан",
+    "createError": "Ошибка создания пользователя",
+    "updateSuccess": "Пользователь успешно обновлен",
+    "updateError": "Ошибка обновления пользователя",
+    "deleteSuccess": "Пользователь успешно удален",
+    "deleteError": "Ошибка удаления пользователя",
+    "deleteConfirmTitle": "Удаление пользователя",
+    "deleteConfirmMessage": "Вы уверены, что хотите удалить пользователя {{username}}? Это действие нельзя отменить.",
     "roles": {
       "admin": "Администратор",
       "user": "Пользователь",
-      "guest": "Гость"
+      "viewer": "Наблюдатель"
     },
-    "status": {
+    "statuses": {
       "active": "Активный",
-      "blocked": "Заблокирован",
-      "pending": "Ожидает"
+      "inactive": "Неактивный",
+      "suspended": "Заблокирован"
     },
     "createUserDialog": {
       "title": "Создать нового пользователя",
@@ -309,7 +325,6 @@
     "qrCodeTitle": "QR код для настройки TOTP",
     "qrCodeInstructions": "Отсканируйте этот QR код в приложении аутентификатора (Google Authenticator, Authy, etc.)",
     "secretKey": "Секретный ключ",
-    "never": "Никогда",
     "addOidcProvider": "Добавить OIDC провайдера",
     "providerType": "Тип провайдера",
     "clientSecret": "Client Secret",
@@ -478,6 +493,6 @@
       "dh": "Diffie-Hellman"
     },
     "automaticBackup": "Автоматическое резервное копирование",
-    "integrationsNotice": "Настройки интеграций с внешними системами будут доступны в следующих версиях."
+    "integrationsNotice": "Настройки интеграции с внешними системами будут доступны в будущих версиях."
   }
 } 

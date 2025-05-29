@@ -4,8 +4,7 @@
 *.dll
 *.so
 *.dylib
-govpn-server
-govpn-client
+govpn-*
 
 # Temporary files
 *.test

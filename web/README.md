@@ -1,221 +1,352 @@
 # GoVPN Web Interface
 
-Современный веб-интерфейс для управления GoVPN сервером с полным набором функций.
+Modern administrative panel for managing GoVPN server, built with React + TypeScript + Material-UI.
 
-## 🚀 Возможности
+## 🚀 Quick Start
 
-### 📊 Dashboard
-- **Общая статистика** - активные подключения, безопасность, производительность
-- **Мониторинг в реальном времени** - статус системы, использование ресурсов
-- **График активности** - подключения и трафик за последние часы
-- **Системные уведомления** - важные события и предупреждения
-- **Последние события** - журнал важных системных событий
+### Launch development environment
 
-### 👥 Управление пользователями
-- **Список пользователей** с ролями и статусами
-- **Создание/редактирование** пользователей
-- **Управление ролями** (admin, user, guest)
-- **Блокировка/разблокировка** пользователей
-- **Просмотр активности** каждого пользователя
-
-### 🌐 Мониторинг сети
-- **Активные подключения** в реальном времени
-- **Статистика трафика** входящего и исходящего
-- **Состояние туннелей** (WireGuard, OpenVPN)
-- **Отключение пользователей** администратором
-- **Детальная информация** о каждом подключении
-- **Системные предупреждения** о сетевых проблемах
-
-### 🛡️ Обфускация трафика
-- **Методы обфускации**:
-  - HTTP Mimicry (имитация HTTP трафика)
-  - TLS Tunnel (туннелирование через TLS)
-  - Shadowsocks (SOCKS5 прокси с шифрованием)
-  - Domain Fronting (маскировка через CDN)
-  - DNS Tunneling (туннелирование через DNS)
-- **Автоматическое переключение** при обнаружении DPI
-- **Геолокационные настройки** (разные методы для разных регионов)
-- **Статистика эффективности** каждого метода
-- **Тонкая настройка** параметров обфускации
-
-### 🔐 Аутентификация и безопасность
-- **Базовая аутентификация** (логин/пароль)
-- **OIDC интеграция**:
-  - Keycloak
-  - Google Workspace
-  - Azure AD
-  - Auth0
-  - Okta
-  - GitLab
-- **LDAP/Active Directory** интеграция
-- **MFA (Multi-Factor Authentication)**:
-  - TOTP (Google Authenticator, Authy)
-  - HOTP (Hardware tokens)
-  - Backup codes
-- **Управление сессиями** и политики безопасности
-
-### 📜 PKI и управление сертификатами
-- **CA сертификаты** (центры сертификации)
-- **Серверные сертификаты** для VPN серверов
-- **Клиентские сертификаты** для пользователей
-- **Автоматическое создание** сертификатов
-- **Мониторинг истечения** сроков действия
-- **Отзыв сертификатов** (CRL)
-- **Экспорт/импорт** сертификатов
-
-### 📋 Логи и аудит
-- **Системные логи** всех компонентов
-- **Аудит пользователей** - все действия пользователей
-- **Фильтрация и поиск** по логам
-- **Экспорт логов** в различных форматах
-- **Уровни логирования** (error, warning, info, debug)
-- **Автоматическая ротация** логов
-
-### ⚙️ Настройки системы
-- **Сетевые настройки** (IP ranges, DNS, routing)
-- **Настройки безопасности** (шифрование, протоколы)
-- **Интеграции** (LDAP, OIDC, внешние системы)
-- **Системные параметры** (лимиты, таймауты)
-- **Резервное копирование** конфигурации
-
-## 🎨 Дизайн и UX
-
-### Современный интерфейс
-- **Material Design** с темной темой
-- **Responsive дизайн** для всех устройств
-- **Интуитивная навигация** с иконками
-- **Быстрые действия** и контекстные меню
-- **Красивые графики** и визуализации
-
-### Производительность
-- **React 18** с современными хуками
-- **TypeScript** для типобезопасности
-- **Material-UI v6** компоненты
-- **Оптимизированная сборка** с Vite
-- **Lazy loading** страниц
-
-### Валидация форм
-- **React Hook Form** для управления формами
-- **Zod** для валидации схем
-- **Мгновенная валидация** при вводе
-- **Понятные сообщения** об ошибках
-
-## 🔧 Техническая информация
-
-### Стек технологий
-- **Frontend**: React 18.3, TypeScript 5.7
-- **UI Framework**: Material-UI v6
-- **Forms**: React Hook Form + Zod
-- **Build Tool**: Vite 6
-- **Linting**: ESLint + Prettier
-
-### Архитектура
-- **Компонентная архитектура** с переиспользуемыми компонентами
-- **Context API** для глобального состояния
-- **Protected Routes** для авторизации
-- **Модульная структура** файлов
-- **TypeScript интерфейсы** для всех данных
-
-### Безопасность
-- **JWT токены** для аутентификации
-- **Protected routes** на клиенте
-- **Input validation** на всех формах
-- **XSS защита** через React
-- **CSRF токены** (готовность к бэкенду)
-
-## 🚀 Запуск
-
-### Быстрый старт
 ```bash
+# From project root
+./scripts/dev-start.sh
+```
+
+Or manually:
+
+```bash
+# 1. Start API server
+go build -o govpn-dev-api ./cmd/dev-api
+./govpn-dev-api -port 8080 -host 127.0.0.1
+
+# 2. Start web interface
 cd web
 npm install
 npm run dev
 ```
 
-### Доступ
-- **URL**: http://localhost:5173
-- **Логин**: admin
-- **Пароль**: admin123
+Open http://localhost:5173 in browser.
 
-### Сборка
-```bash
-npm run build
-npm run preview
-```
-
-## 📁 Структура проекта
+## 📁 Project Structure
 
 ```
 web/
+├── public/                    # Static assets
 ├── src/
-│   ├── components/          # Переиспользуемые компоненты
-│   │   └── ProtectedRoute.tsx
-│   ├── pages/               # Страницы приложения
-│   │   ├── Dashboard.tsx    # Главная панель
-│   │   ├── Users.tsx        # Управление пользователями
-│   │   ├── Network.tsx      # Мониторинг сети
-│   │   ├── Obfuscation.tsx  # Настройки обфускации
-│   │   ├── Authentication.tsx # Аутентификация
-│   │   ├── Certificates.tsx # PKI сертификаты
-│   │   ├── Logs.tsx         # Логи и аудит
-│   │   ├── Settings.tsx     # Настройки системы
-│   │   └── Login.tsx        # Страница входа
-│   ├── layouts/
-│   │   └── MainLayout.tsx   # Основной layout
-│   ├── contexts/
-│   │   └── AuthContext.tsx  # Контекст аутентификации
-│   ├── services/
-│   │   └── api.ts           # API клиент
-│   ├── types/
-│   │   └── index.ts         # TypeScript типы
-│   ├── App.tsx              # Главный компонент
-│   ├── main.tsx             # Точка входа
-│   └── theme.ts             # Тема Material-UI
-├── public/                  # Статические файлы
-├── package.json             # Зависимости
-├── vite.config.ts           # Конфигурация Vite
-├── tsconfig.json            # Конфигурация TypeScript
-└── README.md                # Документация
+│   ├── components/           # React components
+│   │   ├── LanguageSwitcher.tsx
+│   │   ├── ThemeSwitcher.tsx
+│   │   └── MainLayout.tsx
+│   ├── contexts/             # React contexts
+│   │   ├── AuthContext.tsx
+│   │   ├── SettingsContext.tsx
+│   │   └── ThemeContext.tsx
+│   ├── pages/                # Application pages
+│   │   ├── Login.tsx
+│   │   ├── Dashboard.tsx
+│   │   ├── Users.tsx         # User management
+│   │   ├── Network.tsx       # Network connections
+│   │   ├── Certificates.tsx  # Certificate management
+│   │   ├── Authentication.tsx
+│   │   ├── Obfuscation.tsx
+│   │   ├── Logs.tsx
+│   │   └── Settings.tsx
+│   ├── services/             # API clients
+│   │   └── api.ts           # Typed API client
+│   ├── locales/             # Translations
+│   │   ├── en.json          # English (483 lines)
+│   │   └── ru.json          # Russian (483 lines)
+│   ├── App.tsx              # Main component
+│   └── main.tsx             # Entry point
+├── package.json             # Dependencies
+├── tsconfig.json           # TypeScript configuration
+├── vite.config.ts          # Vite configuration
+└── README.md               # This documentation
 ```
 
-## 🔮 Готовность к интеграции
+## 🎯 Main Features
 
-Веб-интерфейс полностью готов к интеграции с Go бэкендом:
+### 1. User Management (`/users`)
 
-### API endpoints (готовы к реализации)
-- `POST /api/auth/login` - Аутентификация
-- `GET /api/dashboard/stats` - Статистика dashboard
-- `GET /api/users` - Список пользователей  
-- `GET /api/network/connections` - Активные подключения
-- `GET /api/obfuscation/methods` - Методы обфускации
-- `GET /api/certificates` - Сертификаты
-- `GET /api/logs` - Логи системы
-- И многие другие...
+- **User list view** with filtering and search
+- **Create new users** with roles (admin/user/viewer)
+- **Edit user profiles**
+- **Manage statuses** (active/inactive/suspended)
+- **Delete users** with confirmation
+- **Statistics**: total count, active, inactive
 
-### Все данные типизированы
-- **TypeScript интерфейсы** для всех API responses
-- **Валидация** входящих данных
-- **Error handling** для всех запросов
+### 2. Dashboard (`/`)
 
-## 🎯 Особенности реализации
+- **Real-time server statistics**
+- **Connection information**
+- **Traffic (inbound/outbound)**
+- **Active routes**
+- **Server uptime**
 
-### Соответствие IDEA.md
-- ✅ **Все функции** из технического задания реализованы
-- ✅ **OIDC аутентификация** с поддержкой множества провайдеров
-- ✅ **MFA** с TOTP и backup кодами
-- ✅ **PKI управление** сертификатами
-- ✅ **Обфускация трафика** со всеми методами
-- ✅ **Полный мониторинг** сети и подключений
-- ✅ **Комплексный аудит** и логирование
+### 3. Network connections (`/network`)
 
-### Локализация
-- **Русский интерфейс** по умолчанию
-- **Понятные термины** для российских пользователей
-- **Правильное форматирование** дат и чисел
+- **List of active connections**
+- **Client information**: IP addresses, protocols, traffic
+- **Client geolocation**
+- **Obfuscation methods**
+- **Connection management**
 
-### UX для российских условий
-- **Учет DPI filtering** в настройках обфускации
-- **Региональные методы** обхода блокировок
-- **Адаптация под российские требования** безопасности
+### 4. Certificate management (`/certificates`)
 
-Веб-интерфейс представляет собой полноценное решение для управления GoVPN сервером с современным дизайном и всеми необходимыми функциями для обеспечения безопасности и производительности VPN сервиса. 
+- **View certificates** (CA, server, client)
+- **Create new certificates**
+- **Check validity and statuses**
+- **Revoke certificates**
+- **Algorithm and serial number information**
+
+### 5. Authentication settings (`/authentication`)
+
+- **Configure authentication methods**
+- **LDAP/OIDC integration**
+- **Multi-factor authentication (MFA)**
+- **Session management**
+
+### 6. Obfuscation settings (`/obfuscation`)
+
+- **Configure obfuscation methods**
+- **Regional profiles**
+- **DPI bypass**
+- **Effectiveness statistics**
+
+### 7. System logs (`/logs`)
+
+- **Real-time log viewing**
+- **Filter by levels and components**
+- **Content search**
+- **Log export**
+
+### 8. Settings (`/settings`)
+
+- **Server configuration**
+- **Network settings**
+- **Security**
+- **Backup**
+
+## 🌐 Internationalization
+
+Full multi-language support:
+
+- **Russian language**: 483 lines of translations
+- **English language**: 483 lines of translations
+- **Dynamic language switching**
+- **Save user preferences** in localStorage
+
+### Translation structure
+
+```json
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    // ... common translations
+  },
+  "navigation": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    // ... navigation
+  },
+  "users": {
+    "title": "User Management",
+    "createUser": "Create User",
+    // ... translations for users page
+  }
+  // ... other sections
+}
+```
+
+## 🎨 UI/UX Design
+
+### Material-UI components
+
+- **Cards** for information grouping
+- **Chips** for statuses and roles
+- **Dialogs** for modal windows
+- **Snackbars** for notifications
+- **Data tables** with sorting and filtering
+- **Icons** for intuitive understanding
+
+### Themes
+
+- **Light theme** (default)
+- **Dark theme**
+- **System theme** (automatic switching)
+- **Save preferences**
+
+### Responsiveness
+
+- **Desktop** - full functionality
+- **Tablet** - adapted interface
+- **Mobile** - optimized display
+
+## 🔗 API Integration
+
+### Typed API client
+
+```typescript
+// Example of API client usage
+import { api } from '../services/api'
+
+// Get users
+const response = await api.getUsers()
+if (response.success) {
+  setUsers(response.data)
+}
+
+// Create user
+const newUser = await api.createUser({
+  username: 'john.doe',
+  email: 'john@example.com',
+  password: 'secure_password',
+  role: 'user',
+  status: 'active'
+})
+```
+
+### Data interfaces
+
+```typescript
+interface User {
+  id: string
+  username: string
+  email: string
+  role: 'admin' | 'user' | 'viewer'
+  status: 'active' | 'inactive' | 'suspended'
+  lastLogin: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ServerStatus {
+  running: boolean
+  clientCount: number
+  bytesIn: number
+  bytesOut: number
+  activeRoutes: string[]
+  startTime: string
+  uptime: number
+}
+```
+
+## 🔐 Security
+
+### Authentication
+
+- **JWT tokens** for authorization
+- **Automatic token refresh**
+- **Secure storage** in localStorage
+- **Automatic logout** on session expiration
+
+### Protected routes
+
+```typescript
+// Protected route component
+<ProtectedRoute>
+  <UsersPage />
+</ProtectedRoute>
+```
+
+## 📦 Dependencies
+
+### Main
+
+- **React 18** - UI library
+- **TypeScript** - typing
+- **Material-UI (MUI)** - design system
+- **React Router** - routing
+- **i18next** - internationalization
+- **Vite** - bundler
+
+### Development tools
+
+- **ESLint** - linter
+- **Prettier** - code formatting
+- **TypeScript** - type checking
+
+## 🚀 Deployment
+
+### Development
+
+```bash
+npm run dev         # Start dev server
+npm run build       # Build for production
+npm run preview     # Preview build
+```
+
+### Production
+
+```bash
+# Build
+npm run build
+
+# Result in dist/ folder
+# Can be deployed to any web server (nginx, apache, etc.)
+```
+
+## 🧪 Testing
+
+```bash
+npm run test        # Run tests (when added)
+npm run lint        # Code check
+npm run type-check  # TypeScript type check
+```
+
+## 🔧 Configuration
+
+### Environment variables
+
+```env
+VITE_API_URL=http://localhost:8080/api/v1  # API server URL
+```
+
+### Vite configuration
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 5173,
+    proxy: {
+      '/api': 'http://localhost:8080'  // API proxying
+    }
+  }
+})
+```
+
+## 📈 Monitoring and metrics
+
+- **Performance monitoring** via browser DevTools
+- **Network request** tracking
+- **Error tracking** in console
+- **Bundle size analysis**
+
+## 🤝 Development
+
+### Adding a new page
+
+1. Create component in `src/pages/`
+2. Add translations in `src/locales/`
+3. Add route in `App.tsx`
+4. Add navigation in `MainLayout.tsx`
+
+### Adding API endpoint
+
+1. Add interfaces in `src/services/api.ts`
+2. Add methods in `ApiClient` class
+3. Use in components
+
+### Coding style
+
+- **TypeScript** strict typing
+- **Functional components** with hooks
+- **Material-UI** for styling
+- **i18next** for texts
+
+---
+
+**GoVPN Web Interface** - full-featured administrative panel, ready for production use! 🚀 

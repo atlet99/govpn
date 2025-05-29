@@ -55,7 +55,9 @@
       "hoursAgo": "{{count}} hours ago",
       "daysAgo": "{{count}} days ago",
       "weeksAgo": "{{count}} weeks ago"
-    }
+    },
+    "loadError": "Failed to load data. Please try again.",
+    "never": "Never"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -125,23 +127,37 @@
   },
   "users": {
     "title": "User Management",
-    "createUser": "Create User",
+    "addUser": "Add User",
     "editUser": "Edit User",
+    "createUser": "Create User",
     "deleteUser": "Delete User",
     "username": "Username",
     "email": "Email",
+    "password": "Password",
     "role": "Role",
     "lastLogin": "Last Login",
     "createdAt": "Created",
+    "totalUsers": "Total Users",
+    "activeUsers": "Active Users",
+    "inactiveUsers": "Inactive Users",
+    "suspendedUsers": "Suspended Users",
+    "createSuccess": "User created successfully",
+    "createError": "Failed to create user",
+    "updateSuccess": "User updated successfully",
+    "updateError": "Failed to update user",
+    "deleteSuccess": "User deleted successfully",
+    "deleteError": "Failed to delete user",
+    "deleteConfirmTitle": "Delete User",
+    "deleteConfirmMessage": "Are you sure you want to delete user {{username}}? This action cannot be undone.",
     "roles": {
       "admin": "Administrator",
       "user": "User",
-      "guest": "Guest"
+      "viewer": "Viewer"
     },
-    "status": {
+    "statuses": {
       "active": "Active",
-      "blocked": "Blocked",
-      "pending": "Pending"
+      "inactive": "Inactive",
+      "suspended": "Suspended"
     },
     "createUserDialog": {
       "title": "Create New User",
@@ -152,7 +168,6 @@
       "role": "Role",
       "selectRole": "Select Role"
     },
-    "deleteConfirm": "Are you sure you want to delete user {{username}}?",
     "userCreated": "User created successfully",
     "userUpdated": "User updated successfully",
     "userDeleted": "User deleted successfully"
