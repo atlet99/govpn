@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -2056,5 +2057,96 @@ func BenchmarkHTTPSteganographyObfuscation(b *testing.B) {
 		if err != nil {
 			b.Fatalf("Deobfuscation failed: %v", err)
 		}
+	}
+}
+
+func TestObfsproxy(t *testing.T) {
+	logger := log.New(os.Stderr, "[TEST] ", log.LstdFlags)
+
+	config := &ObfsproxyConfig{
+		Enabled:    true,
+		Executable: "obfsproxy",
+		Mode:       "client",
+		Transport:  "obfs4",
+		Address:    "127.0.0.1",
+		Port:       12345,
+		LogLevel:   "INFO",
+	}
+
+	obfs, err := NewObfsproxy(config, logger)
+	if err != nil {
+		t.Fatalf("Failed to create obfsproxy: %v", err)
+	}
+
+	if obfs.Name() != MethodObfsproxy {
+		t.Errorf("Expected method name %s, got %s", MethodObfsproxy, obfs.Name())
+	}
+
+	// Проверяем доступность obfsproxy
+	// Примечание: этот тест может быть пропущен, если obfsproxy не установлен
+	if !obfs.IsAvailable() {
+		t.Skip("Obfsproxy is not available, skipping test")
+	}
+
+	// Тестируем обфускацию данных
+	testData := []byte("VPN traffic test data for obfsproxy")
+
+	obfuscated, err := obfs.Obfuscate(testData)
+	if err != nil {
+		t.Fatalf("Failed to obfuscate data: %v", err)
+	}
+
+	deobfuscated, err := obfs.Deobfuscate(obfuscated)
+	if err != nil {
+		t.Fatalf("Failed to deobfuscate data: %v", err)
+	}
+
+	if !bytes.Equal(testData, deobfuscated) {
+		t.Errorf("Obfsproxy round-trip failed.\nOriginal: %s\nDeobfuscated: %s",
+			string(testData), string(deobfuscated))
+	}
+
+	// Проверяем метрики
+	metrics := obfs.GetMetrics()
+	if metrics.PacketsProcessed != 2 {
+		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
+	}
+
+	if metrics.BytesProcessed != int64(len(testData)*2) {
+		t.Errorf("Expected %d bytes processed, got %d", len(testData)*2, metrics.BytesProcessed)
+	}
+
+	// Тестируем обертку соединения
+	// Создаем тестовое соединение
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+
+	// Оборачиваем клиентское соединение
+	wrappedClient, err := obfs.WrapConn(client)
+	if err != nil {
+		t.Fatalf("Failed to wrap connection: %v", err)
+	}
+	defer wrappedClient.Close()
+
+	// Отправляем тестовые данные
+	testData = []byte("Test data for wrapped connection")
+	go func() {
+		_, err := wrappedClient.Write(testData)
+		if err != nil {
+			t.Errorf("Failed to write to wrapped connection: %v", err)
+		}
+	}()
+
+	// Читаем данные на серверной стороне
+	buf := make([]byte, 1024)
+	n, err := server.Read(buf)
+	if err != nil {
+		t.Fatalf("Failed to read from server: %v", err)
+	}
+
+	if !bytes.Equal(testData, buf[:n]) {
+		t.Errorf("Data mismatch in wrapped connection.\nOriginal: %s\nReceived: %s",
+			string(testData), string(buf[:n]))
 	}
 }

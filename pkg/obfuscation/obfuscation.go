@@ -33,6 +33,7 @@ const (
 	MethodTrafficPadding ObfuscationMethod = "traffic_padding"
 	MethodFlowWatermark  ObfuscationMethod = "flow_watermark"
 	MethodHTTPStego      ObfuscationMethod = "http_stego"
+	MethodObfsproxy      ObfuscationMethod = "obfsproxy"
 )
 
 // Obfuscator interface for all obfuscation methods
@@ -72,6 +73,7 @@ type Config struct {
 	DNSTunnel         DNSTunnelConfig      `json:"dns_tunnel"`
 	HTTPStego         HTTPStegoConfig      `json:"http_stego"`
 	XORKey            []byte               `json:"xor_key,omitempty"`
+	Obfsproxy         ObfsproxyConfig      `json:"obfsproxy"`
 }
 
 type PacketPaddingConfig struct {
@@ -3240,6 +3242,8 @@ func (e *Engine) initializeObfuscators() error {
 			obfuscator, err = NewFlowWatermark(&e.config.FlowWatermark, e.logger)
 		case MethodHTTPStego:
 			obfuscator, err = NewHTTPSteganography(&e.config.HTTPStego, e.logger)
+		case MethodObfsproxy:
+			obfuscator, err = NewObfsproxy(&e.config.Obfsproxy, e.logger)
 		default:
 			e.logger.Printf("Warning: unsupported obfuscation method: %s", method)
 			continue

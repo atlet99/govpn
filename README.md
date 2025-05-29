@@ -47,7 +47,8 @@ GoVPN aims to evolve OpenVPN, preserving its time-tested concepts while addressi
 - ✅ **OIDC integration** - works with Keycloak, Google Workspace, Azure AD, Auth0, Okta, GitLab
 
 #### ✅ COMPLETED: Comprehensive Obfuscation System
-- ✅ **Modular obfuscation system** with 8 methods (TLS Tunnel, HTTP Mimicry, DNS Tunnel, XOR, etc.)
+- ✅ **Modular obfuscation system** with 9 methods (TLS Tunnel, HTTP Mimicry, DNS Tunnel, XOR, Obfsproxy, etc.)
+- ✅ **OpenVPN obfsproxy compatibility** - Direct integration with OpenVPN obfsproxy plugins
 - ✅ **Anti-statistical analysis** - Packet Padding, Timing Obfuscation, Traffic Padding, Flow Watermarking
 - ✅ **Steganography methods** - HTTP Cover Traffic, DNS Tunneling
 - ✅ **Regional profiles** for China, Iran, Russia with adaptive switching
@@ -121,7 +122,7 @@ Development API server provides:
 ### ✅ Implemented
 - ✅ **Complete Configuration System** - Enhanced OpenVPN config parser with 80+ new parameters
 - ✅ **Authentication System** - Local, MFA, LDAP, OIDC with standard libraries
-- ✅ **Traffic Obfuscation** - 8 methods with anti-detection and regional profiles
+- ✅ **Traffic Obfuscation** - 9 methods with anti-detection and regional profiles
 - ✅ **OpenVPN Compatibility** - Protocol and configuration support
 - ✅ **Modern Cryptography** - TLSv1.3, AES-GCM, ChaCha20-Poly1305
 - ✅ **REST API** - Complete server management interface
@@ -142,6 +143,23 @@ Development API server provides:
 - Network access for LDAP/OIDC providers (if used)
 
 ## Quick Start
+
+### Prerequisites
+- Go 1.21 or later
+- Linux/macOS/Windows
+- **For obfsproxy support**: obfsproxy or obfs4proxy installed
+
+### Installation Check
+```bash
+# Check if obfsproxy is installed and working
+./scripts/check_obfsproxy.sh
+
+# Install obfsproxy if needed (macOS)
+brew install obfs4proxy
+
+# Install obfsproxy if needed (Ubuntu)
+sudo apt-get install obfsproxy
+```
 
 ### Installation
 
@@ -379,6 +397,7 @@ GoVPN includes a comprehensive traffic obfuscation system designed to bypass Dee
 6. **Packet Padding** - Size randomization
 7. **Timing Obfuscation** - Temporal pattern masking
 8. **Traffic Padding** - Volume pattern masking
+9. **Obfsproxy** - OpenVPN obfsproxy plugin compatibility (obfs3, obfs4, scramblesuit)
 
 ### Regional Profiles
 
@@ -397,6 +416,12 @@ GoVPN includes a comprehensive traffic obfuscation system designed to bypass Dee
 
 # Custom XOR key
 ./govpn-server -config deploy/server.conf -obfuscation -xor-key="my-secret-key"
+
+# Enable obfsproxy with obfs4 transport
+./govpn-server -config deploy/server.conf -obfuscation -obfsproxy-transport=obfs4
+
+# Obfsproxy server mode
+./govpn-server -config deploy/server.conf -obfuscation -obfsproxy-mode=server
 ```
 
 ## Development
@@ -499,6 +524,7 @@ Comprehensive documentation is available in the [docs/](docs/) directory and [de
   - Role-based access control
 
 - **[Obfuscation System](docs/obfuscation/)** - Traffic hiding techniques
+  - **[Obfsproxy Integration](examples/OBFSPROXY_USAGE.md)** - OpenVPN obfsproxy compatibility guide
 - **[API Reference](docs/api.md)** - REST API documentation
 - **[Deployment Guide](docs/deployment.md)** - Production setup
 

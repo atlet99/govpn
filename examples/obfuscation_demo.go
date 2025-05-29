@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -14,91 +15,40 @@ import (
 )
 
 func main() {
-	fmt.Println("=== GoVPN Traffic Obfuscation Demo ===")
-	fmt.Println()
+	fmt.Println("🚀 GoVPN Complete Obfuscation Demo")
+	fmt.Println("===================================")
 
-	// Create logger
 	logger := log.New(os.Stdout, "[DEMO] ", log.LstdFlags)
 
-	// XOR obfuscation demonstration
-	fmt.Println("1. XOR Obfuscation Demo")
-	fmt.Println("-----------------------")
+	fmt.Printf("🎯 Demonstration of all GoVPN obfuscation methods\n\n")
+
+	// Basic obfuscation methods
 	demoXORObfuscation(logger)
-	fmt.Println()
-
-	// Obfuscation engine demonstration
-	fmt.Println("2. Obfuscation Engine Demo")
-	fmt.Println("---------------------------")
 	demoObfuscationEngine(logger)
-	fmt.Println()
-
-	// Regional profiles demonstration
-	fmt.Println("3. Regional Profiles Demo")
-	fmt.Println("-------------------------")
 	demoRegionalProfiles(logger)
-	fmt.Println()
-
-	// TLS Tunneling demonstration
-	fmt.Println("4. TLS Tunneling Demo")
-	fmt.Println("---------------------")
 	demoTLSTunneling(logger)
-	fmt.Println()
-
-	// Packet Padding demonstration
-	fmt.Println("5. Packet Padding Demo")
-	fmt.Println("----------------------")
 	demoPacketPadding(logger)
-	fmt.Println()
-
-	// Timing Obfuscation demonstration
-	fmt.Println("6. Timing Obfuscation Demo")
-	fmt.Println("--------------------------")
 	demoTimingObfuscation(logger)
-	fmt.Println()
-
-	// Traffic Padding demonstration
-	fmt.Println("7. Traffic Padding Demo")
-	fmt.Println("-----------------------")
 	demoTrafficPadding(logger)
-	fmt.Println()
-
-	// Flow Watermarking demonstration
-	fmt.Println("8. Flow Watermarking Demo")
-	fmt.Println("-------------------------")
-	demoFlowWatermarking(logger)
-	fmt.Println()
-
-	// HTTP Mimicry demonstration
-	fmt.Println("9. HTTP Mimicry Demo")
-	fmt.Println("--------------------")
 	demoHTTPMimicry(logger)
-	fmt.Println()
-
-	// DNS Tunneling demonstration
-	fmt.Println("10. DNS Tunneling Demo")
-	fmt.Println("----------------------")
 	demoDNSTunneling(logger)
-	fmt.Println()
-
-	// HTTP Steganography demonstration
-	fmt.Println("11. HTTP Steganography Demo")
-	fmt.Println("---------------------------")
 	demoHTTPSteganography(logger)
-	fmt.Println()
-
-	// Auto-switching demonstration
-	fmt.Println("12. Auto-switching Demo")
-	fmt.Println("-----------------------")
+	demoFlowWatermarking(logger)
 	demoAutoSwitching(logger)
-	fmt.Println()
 
-	// Authentication and Authorization demonstration
-	fmt.Println("13. Authentication & Authorization Demo")
-	fmt.Println("---------------------------------------")
+	// Obfsproxy integration
+	demoObfsproxyConfigurations(logger)
+	demoObfsproxyEngineIntegration(logger)
+	demoObfsproxyRealTesting(logger)
+
+	// Authentication
 	demoAuthentication(logger)
-	fmt.Println()
 
-	fmt.Println("Demo completed successfully!")
+	fmt.Println("\n🎉 Demonstration completed! All obfuscation methods have been tested.")
+	fmt.Println("📚 For additional information, please refer to the documentation:")
+	fmt.Println("   - docs/obfuscation/")
+	fmt.Println("   - examples/OBFSPROXY_USAGE.md")
+	fmt.Println("   - docs/TESTING_OBFSPROXY.md")
 }
 
 func demoXORObfuscation(logger *log.Logger) {
@@ -1828,20 +1778,322 @@ func demoOIDCConfig() {
 }
 
 func testHashingMethods() {
-	// Demonstration of different hashing method configurations
-	fmt.Printf("✓ Supported hashing algorithms:\n")
-	fmt.Printf("  - Argon2: modern algorithm, resistant to GPU attacks\n")
-	fmt.Printf("  - PBKDF2: standard algorithm with high iteration count\n")
+	fmt.Println("      🔐 Testing hashing methods:")
+	fmt.Println("         Supported: bcrypt, argon2, pbkdf2, scrypt")
+	fmt.Println("         See authentication documentation for details")
+}
 
-	// Argon2 configuration
-	argonConfig := auth.DefaultAuthConfig()
-	argonConfig.HashMethod = "argon2"
-	fmt.Printf("✓ Argon2 parameters: memory=%d KB, time=%d, threads=%d\n",
-		argonConfig.Argon2Memory, argonConfig.Argon2Time, argonConfig.Argon2Threads)
+// Obfsproxy demonstration functions
 
-	// PBKDF2 configuration
-	pbkdfConfig := auth.DefaultAuthConfig()
-	pbkdfConfig.HashMethod = "pbkdf2"
-	fmt.Printf("✓ PBKDF2 parameters: iterations=%d, key length=%d\n",
-		pbkdfConfig.PBKDF2Iterations, pbkdfConfig.PBKDF2KeyLength)
+func demoObfsproxyConfigurations(logger *log.Logger) {
+	fmt.Println("\n📋 13. Obfsproxy Configurations Demo")
+	fmt.Println("====================================")
+
+	configs := []struct {
+		name   string
+		config *obfuscation.ObfsproxyConfig
+	}{
+		{
+			name: "obfs3 Client",
+			config: &obfuscation.ObfsproxyConfig{
+				Enabled:    true,
+				Executable: "obfsproxy",
+				Mode:       "client",
+				Transport:  "obfs3",
+				Address:    "server.example.com",
+				Port:       443,
+				LogLevel:   "INFO",
+			},
+		},
+		{
+			name: "obfs4 Client with Options",
+			config: &obfuscation.ObfsproxyConfig{
+				Enabled:    true,
+				Executable: "obfsproxy",
+				Mode:       "client",
+				Transport:  "obfs4",
+				Address:    "server.example.com",
+				Port:       443,
+				Options:    "--cert=abc123def456 --iat-mode=0",
+				LogLevel:   "DEBUG",
+			},
+		},
+		{
+			name: "obfs4 Server",
+			config: &obfuscation.ObfsproxyConfig{
+				Enabled:    true,
+				Executable: "obfsproxy",
+				Mode:       "server",
+				Transport:  "obfs4",
+				Address:    "0.0.0.0",
+				Port:       443,
+				LogLevel:   "INFO",
+			},
+		},
+		{
+			name: "scramblesuit with Password",
+			config: &obfuscation.ObfsproxyConfig{
+				Enabled:    true,
+				Executable: "obfsproxy",
+				Mode:       "client",
+				Transport:  "scramblesuit",
+				Address:    "server.example.com",
+				Port:       8080,
+				Options:    "--password=MySecretPassword123",
+				LogLevel:   "INFO",
+			},
+		},
+	}
+
+	for i, cfg := range configs {
+		fmt.Printf("\n   %d. %s\n", i+1, cfg.name)
+		fmt.Printf("      Transport: %s\n", cfg.config.Transport)
+		fmt.Printf("      Mode: %s\n", cfg.config.Mode)
+		fmt.Printf("      Address: %s:%d\n", cfg.config.Address, cfg.config.Port)
+		if cfg.config.Options != "" {
+			fmt.Printf("      Options: %s\n", cfg.config.Options)
+		}
+
+		// Create obfsproxy with this configuration
+		obfs, err := obfuscation.NewObfsproxy(cfg.config, logger)
+		if err != nil {
+			fmt.Printf("      ❌ Creation error: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("      ✅ Created successfully\n")
+		fmt.Printf("      📊 Available: %v\n", obfs.IsAvailable())
+
+		// Test basic operations
+		testData := []byte("Test data for " + cfg.name)
+		obfuscated, err := obfs.Obfuscate(testData)
+		if err != nil {
+			fmt.Printf("      ❌ Obfuscation error: %v\n", err)
+		} else {
+			fmt.Printf("      🔒 Obfuscation: %d bytes → %d bytes\n", len(testData), len(obfuscated))
+		}
+
+		deobfuscated, err := obfs.Deobfuscate(obfuscated)
+		if err != nil {
+			fmt.Printf("      ❌ Deobfuscation error: %v\n", err)
+		} else {
+			fmt.Printf("      🔓 Deobfuscation: %d bytes → %d bytes\n", len(obfuscated), len(deobfuscated))
+		}
+
+		// Show metrics
+		metrics := obfs.GetMetrics()
+		fmt.Printf("      📈 Packets processed: %d\n", metrics.PacketsProcessed)
+		fmt.Printf("      📊 Bytes processed: %d\n", metrics.BytesProcessed)
+	}
+	fmt.Println()
+}
+
+func demoObfsproxyEngineIntegration(logger *log.Logger) {
+	fmt.Println("\n🔧 14. Obfsproxy Engine Integration Demo")
+	fmt.Println("========================================")
+
+	// Create engine configuration with obfsproxy
+	config := &obfuscation.Config{
+		EnabledMethods:   []obfuscation.ObfuscationMethod{obfuscation.MethodObfsproxy, obfuscation.MethodXORCipher},
+		PrimaryMethod:    obfuscation.MethodObfsproxy,
+		FallbackMethods:  []obfuscation.ObfuscationMethod{obfuscation.MethodXORCipher},
+		AutoDetection:    true,
+		SwitchThreshold:  3,
+		DetectionTimeout: 30 * time.Second,
+		Obfsproxy: obfuscation.ObfsproxyConfig{
+			Enabled:    true,
+			Executable: "obfsproxy",
+			Mode:       "client",
+			Transport:  "obfs4",
+			Address:    "server.example.com",
+			Port:       443,
+			LogLevel:   "INFO",
+		},
+		XORKey: []byte("fallback-xor-key-for-testing-purposes"),
+	}
+
+	fmt.Printf("   📝 Engine configuration:\n")
+	fmt.Printf("      Primary method: %s\n", config.PrimaryMethod)
+	fmt.Printf("      Fallback methods: %v\n", config.FallbackMethods)
+	fmt.Printf("      Auto-detection: %v\n", config.AutoDetection)
+
+	// Create engine (this won't work without real obfsproxy)
+	fmt.Printf("\n   🔄 Attempting to create engine...\n")
+	engine, err := obfuscation.NewEngine(config, logger)
+	if err != nil {
+		fmt.Printf("      ❌ Engine creation error: %v\n", err)
+		fmt.Printf("      💡 This is expected since obfsproxy is not installed\n")
+		return
+	}
+	defer engine.Close()
+
+	fmt.Printf("      ✅ Engine created successfully!\n")
+	fmt.Printf("      🎯 Current method: %s\n", engine.GetCurrentMethod())
+
+	// Test obfuscation through engine
+	testData := []byte("Engine integration test data")
+	fmt.Printf("\n   🧪 Testing obfuscation:\n")
+	fmt.Printf("      Source data: %d bytes\n", len(testData))
+
+	obfuscated, err := engine.ObfuscateData(testData)
+	if err != nil {
+		fmt.Printf("      ❌ Obfuscation error: %v\n", err)
+		return
+	}
+	fmt.Printf("      🔒 Obfuscated: %d bytes\n", len(obfuscated))
+
+	deobfuscated, err := engine.DeobfuscateData(obfuscated)
+	if err != nil {
+		fmt.Printf("      ❌ Deobfuscation error: %v\n", err)
+		return
+	}
+	fmt.Printf("      🔓 Deobfuscated: %d bytes\n", len(deobfuscated))
+
+	// Check data integrity
+	if string(testData) == string(deobfuscated) {
+		fmt.Printf("      ✅ Data restored correctly!\n")
+	} else {
+		fmt.Printf("      ❌ Error: data mismatch!\n")
+	}
+
+	// Show engine metrics
+	metrics := engine.GetMetrics()
+	fmt.Printf("\n   📊 Engine metrics:\n")
+	fmt.Printf("      Total packets: %d\n", metrics.TotalPackets)
+	fmt.Printf("      Total bytes: %d\n", metrics.TotalBytes)
+	fmt.Printf("      Method switches: %d\n", metrics.MethodSwitches)
+	fmt.Println()
+}
+
+// checkObfsproxyInstallation checks if obfsproxy is installed
+func checkObfsproxyInstallation() (string, bool) {
+	// Check for obfsproxy first
+	if _, err := exec.LookPath("obfsproxy"); err == nil {
+		return "obfsproxy", true
+	}
+
+	// Check for obfs4proxy
+	if _, err := exec.LookPath("obfs4proxy"); err == nil {
+		return "obfs4proxy", true
+	}
+
+	return "", false
+}
+
+func demoObfsproxyRealTesting(logger *log.Logger) {
+	fmt.Println("\n🧪 15. Obfsproxy Real Testing Demo")
+	fmt.Println("==================================")
+
+	// Check for installed obfsproxy implementation
+	installedExecutable, isInstalled := checkObfsproxyInstallation()
+
+	if !isInstalled {
+		fmt.Printf("   ❌ No obfsproxy implementation found\n")
+		fmt.Printf("   💡 Installation recommendations:\n")
+		fmt.Printf("      macOS:   brew install obfs4proxy\n")
+		fmt.Printf("      Ubuntu:  sudo apt-get install obfsproxy\n")
+		fmt.Printf("      CentOS:  sudo yum install obfsproxy\n")
+		fmt.Printf("      Python:  pip install obfsproxy\n")
+		fmt.Printf("\n   📚 After installation, run this demo again to see real testing\n")
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("   ✅ Found installed implementation: %s\n", installedExecutable)
+
+	// Check availability of obfsproxy and obfs4proxy
+	realTools := []struct {
+		name       string
+		executable string
+		available  bool
+	}{
+		{"obfsproxy", "obfsproxy", false},
+		{"obfs4proxy", "obfs4proxy", false},
+	}
+
+	fmt.Printf("   🔍 Checking all possible implementations:\n")
+	for i := range realTools {
+		config := &obfuscation.ObfsproxyConfig{
+			Enabled:    true,
+			Executable: realTools[i].executable,
+			Mode:       "client",
+			Transport:  "obfs4",
+			LogLevel:   "INFO",
+		}
+
+		obfs, err := obfuscation.NewObfsproxy(config, logger)
+		if err != nil {
+			fmt.Printf("      ❌ %s: creation error\n", realTools[i].name)
+			continue
+		}
+
+		realTools[i].available = obfs.IsAvailable()
+		if realTools[i].available {
+			fmt.Printf("      ✅ %s: available\n", realTools[i].name)
+		} else {
+			fmt.Printf("      ❌ %s: not available\n", realTools[i].name)
+		}
+	}
+
+	// Test with available tools
+	for _, tool := range realTools {
+		if !tool.available {
+			continue
+		}
+
+		fmt.Printf("\n   🧪 Testing with %s:\n", tool.name)
+
+		config := &obfuscation.ObfsproxyConfig{
+			Enabled:    true,
+			Executable: tool.executable,
+			Mode:       "client",
+			Transport:  "obfs4",
+			Address:    "127.0.0.1",
+			Port:       9050,
+			LogLevel:   "INFO",
+		}
+
+		obfs, err := obfuscation.NewObfsproxy(config, logger)
+		if err != nil {
+			fmt.Printf("      ❌ Creation error: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("      ✅ Created successfully\n")
+		fmt.Printf("      📊 Method name: %s\n", obfs.Name())
+
+		// Test basic operations
+		testData := []byte("Real tool test data")
+		start := time.Now()
+
+		obfuscated, err := obfs.Obfuscate(testData)
+		if err != nil {
+			fmt.Printf("      ❌ Obfuscation error: %v\n", err)
+			continue
+		}
+
+		duration := time.Since(start)
+		fmt.Printf("      🔒 Obfuscation: %d → %d bytes in %v\n", len(testData), len(obfuscated), duration)
+
+		start = time.Now()
+		deobfuscated, err := obfs.Deobfuscate(obfuscated)
+		if err != nil {
+			fmt.Printf("      ❌ Deobfuscation error: %v\n", err)
+			continue
+		}
+
+		duration = time.Since(start)
+		fmt.Printf("      🔓 Deobfuscation: %d → %d bytes in %v\n", len(obfuscated), len(deobfuscated), duration)
+
+		// Check metrics
+		metrics := obfs.GetMetrics()
+		fmt.Printf("      📈 Packets: %d, Bytes: %d, Avg time: %v\n",
+			metrics.PacketsProcessed, metrics.BytesProcessed, metrics.AvgProcessTime)
+	}
+
+	fmt.Printf("\n   📚 Documentation:\n")
+	fmt.Printf("      Guide: examples/OBFSPROXY_USAGE.md\n")
+	fmt.Printf("      Configuration: examples/obfsproxy_config.json\n")
+	fmt.Printf("      Tests: go test ./pkg/obfuscation/ -v -run TestObfsproxy\n")
+	fmt.Println()
 }

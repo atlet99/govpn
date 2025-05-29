@@ -1,0 +1,25 @@
+{
+  "enabled_methods": ["obfsproxy"],
+  "primary_method": "obfsproxy",
+  "fallback_methods": ["xor_cipher", "tls_tunnel"],
+  "auto_detection": true,
+  "switch_threshold": 3,
+  "detection_timeout": "30s",
+  "regional_profile": "",
+  "obfsproxy": {
+    "enabled": true,
+    "executable": "obfsproxy",
+    "mode": "client",
+    "transport": "obfs4",
+    "address": "127.0.0.1",
+    "port": 9050,
+    "options": "",
+    "log_level": "INFO"
+  },
+  "tls_tunnel": {
+    "server_name": "example.com",
+    "alpn": ["h2", "http/1.1"],
+    "fake_http_headers": true
+  },
+  "xor_key": "VGhpcyBpcyBhIDMyLWJ5dGUga2V5IGZvciBYT1I="
+} 
