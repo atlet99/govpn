@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -131,7 +132,9 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Error encoding JSON response: %v", err)
+	}
 }
 
 func handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -346,8 +349,8 @@ func main() {
 	log.Println("Shutting down...")
 
 	// Stop server
-	if err := server.Shutdown(nil); err != nil {
-		log.Printf("Error stopping server: %v", err)
+	if err := server.Shutdown(context.TODO()); err != nil {
+		log.Printf("Error shutting down server: %v", err)
 	}
 
 	log.Println("Development API server stopped")

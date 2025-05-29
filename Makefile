@@ -3,6 +3,7 @@ BINARY_NAME := govpn
 SERVER_BINARY := govpn-server
 CLIENT_BINARY := govpn-client
 CERTS_BINARY := govpn-certs
+DEV_API_BINARY := govpn-dev-api
 OUTPUT_DIR := bin
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 GOOS ?= $(shell go env GOOS)
@@ -10,7 +11,9 @@ GOARCH ?= $(shell go env GOARCH)
 SERVER_CMD_DIR := cmd/server
 CLIENT_CMD_DIR := cmd/client
 CERTS_CMD_DIR := cmd/generate_certs
+DEV_API_CMD_DIR := cmd/dev-api
 CERTS_DIR := certs
+WEB_DIR := web
 GOPATH ?= $(shell go env GOPATH)
 GOLANGCI_LINT = $(GOPATH)/bin/golangci-lint
 STATICCHECK = $(GOPATH)/bin/staticcheck
@@ -26,6 +29,25 @@ $(CERTS_DIR):
 # Default target
 .PHONY: default
 default: fmt vet lint staticcheck build test
+
+# Development environment setup
+.PHONY: dev-setup
+dev-setup: install-deps install-lint install-staticcheck
+	@echo "Setting up development environment..."
+	@cd $(WEB_DIR) && npm install
+
+# Start development environment (API + Web)
+.PHONY: dev-start
+dev-start: build-dev-api
+	@echo "Starting development environment..."
+	@./$(OUTPUT_DIR)/$(DEV_API_BINARY) -port 8080 -host 127.0.0.1 & \
+	cd $(WEB_DIR) && npm run dev
+
+# Build development API server
+.PHONY: build-dev-api
+build-dev-api: $(OUTPUT_DIR)
+	@echo "Building development API server..."
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(DEV_API_BINARY) ./$(DEV_API_CMD_DIR)
 
 # Build and run the certificate generator
 .PHONY: generate-certs
@@ -59,7 +81,7 @@ test-with-race:
 
 # Run all tests with basic testing
 .PHONY: test
-test:
+test: migrate-testdb
 	go test -v ./... -cover
 
 # Install project dependencies
@@ -98,7 +120,7 @@ build-client: $(OUTPUT_DIR)
 
 # Build all binaries
 .PHONY: build
-build: build-server build-client build-certs
+build: build-server build-client build-certs build-dev-api
 
 # Build binaries for multiple platforms
 .PHONY: build-cross
@@ -122,6 +144,12 @@ build-cross: $(OUTPUT_DIR)
 	GOOS=darwin  GOARCH=arm64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-darwin-arm64 ./$(CERTS_CMD_DIR)
 	GOOS=windows GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(CERTS_BINARY)-windows-amd64.exe ./$(CERTS_CMD_DIR)
 	
+	# Development API server binaries
+	GOOS=linux   GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(DEV_API_BINARY)-linux-amd64 ./$(DEV_API_CMD_DIR)
+	GOOS=darwin  GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(DEV_API_BINARY)-darwin-amd64 ./$(DEV_API_CMD_DIR)
+	GOOS=darwin  GOARCH=arm64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(DEV_API_BINARY)-darwin-arm64 ./$(DEV_API_CMD_DIR)
+	GOOS=windows GOARCH=amd64   go build -ldflags="-X 'main.Version=$(VERSION)'" -o $(OUTPUT_DIR)/$(DEV_API_BINARY)-windows-amd64.exe ./$(DEV_API_CMD_DIR)
+	
 	@echo "Cross-platform binaries are available in $(OUTPUT_DIR):"
 	@ls -1 $(OUTPUT_DIR)
 
@@ -136,6 +164,12 @@ clean:
 clean-certs:
 	@echo "Cleaning certificates..."
 	rm -rf $(CERTS_DIR)
+
+# Clean web build artifacts
+.PHONY: clean-web
+clean-web:
+	@echo "Cleaning web build artifacts..."
+	@cd $(WEB_DIR) && rm -rf node_modules dist
 
 # Check formatting of Go code
 .PHONY: fmt
@@ -205,50 +239,67 @@ help:
 	@echo "GoVPN - OpenVPN Evolution in Go"
 	@echo ""
 	@echo "Available commands:"
-	@echo "  Build and run:"
+	@echo "  Development Environment:"
+	@echo "  ======================="
+	@echo "  dev-setup            - Set up development environment (deps, tools, web)"
+	@echo "  dev-start            - Start development environment (API + Web)"
+	@echo "  build-dev-api        - Build development API server"
+	@echo ""
+	@echo "  Build and Run:"
 	@echo "  =============="
-	@echo "  default         - Run formatting, checks, linter, build and tests"
-	@echo "  run-server      - Run server locally"
-	@echo "  run-client      - Run client locally"
-	@echo "  generate-certs  - Generate certificates for development/testing"
-	@echo "  build           - Build server, client and cert generator for current OS/arch"
-	@echo "  build-server    - Build server only"
-	@echo "  build-client    - Build client only"
-	@echo "  build-certs     - Build certificate generator only"
-	@echo "  build-cross     - Build binaries for multiple platforms"
+	@echo "  default             - Run formatting, checks, linter, build and tests"
+	@echo "  run-server          - Run server locally"
+	@echo "  run-client          - Run client locally"
+	@echo "  generate-certs      - Generate certificates for development/testing"
+	@echo "  build               - Build all binaries for current OS/arch"
+	@echo "  build-server        - Build server only"
+	@echo "  build-client        - Build client only"
+	@echo "  build-certs         - Build certificate generator only"
+	@echo "  build-cross         - Build binaries for multiple platforms"
 	@echo ""
 	@echo "  Testing:"
 	@echo "  ========="
-	@echo "  test            - Run all tests with standard coverage"
-	@echo "  test-with-race  - Run all tests with race detection and coverage"
-	@echo "  test-coverage   - Run tests with coverage report"
-	@echo "  benchmark       - Run benchmarks"
+	@echo "  test                - Run all tests with standard coverage"
+	@echo "  test-with-race      - Run all tests with race detection and coverage"
+	@echo "  test-coverage       - Run tests with coverage report"
+	@echo "  benchmark           - Run benchmarks"
 	@echo ""
-	@echo "  Code quality:"
+	@echo "  Code Quality:"
 	@echo "  ============="
-	@echo "  fmt             - Check and format code"
-	@echo "  vet             - Analyze code with go vet"
-	@echo "  lint            - Run golangci-lint to check code"
-	@echo "  lint-fix        - Run golangci-lint with auto-fix"
-	@echo "  staticcheck     - Run staticcheck for static analysis"
-	@echo "  check-all       - Run all code quality checks"
+	@echo "  fmt                 - Check and format code"
+	@echo "  vet                 - Analyze code with go vet"
+	@echo "  lint                - Run golangci-lint to check code"
+	@echo "  lint-fix            - Run golangci-lint with auto-fix"
+	@echo "  staticcheck         - Run staticcheck for static analysis"
+	@echo "  check-all           - Run all code quality checks"
 	@echo ""
 	@echo "  Dependencies:"
 	@echo "  ============"
-	@echo "  install-deps    - Install project dependencies"
-	@echo "  upgrade-deps    - Upgrade all project dependencies"
-	@echo "  clean-deps      - Clean up vendor dependencies"
-	@echo "  install-lint    - Install golangci-lint"
+	@echo "  install-deps        - Install project dependencies"
+	@echo "  upgrade-deps        - Upgrade all project dependencies"
+	@echo "  clean-deps          - Clean up vendor dependencies"
+	@echo "  install-lint        - Install golangci-lint"
 	@echo "  install-staticcheck - Install staticcheck"
 	@echo ""
 	@echo "  Cleaning:"
 	@echo "  ========="
-	@echo "  clean           - Clean build artifacts"
-	@echo "  clean-certs     - Clean generated certificates"
+	@echo "  clean               - Clean build artifacts"
+	@echo "  clean-certs         - Clean generated certificates"
+	@echo "  clean-web           - Clean web build artifacts"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make build               - Build binaries"
-	@echo "  make generate-certs      - Generate certificates"
-	@echo "  make run-server          - Run server"
-	@echo "  make test                - Run all tests"
-	@echo "  make build-cross         - Build for multiple platforms"
+	@echo "  make dev-setup      - Set up development environment"
+	@echo "  make dev-start      - Start development environment"
+	@echo "  make build          - Build all binaries"
+	@echo "  make test           - Run tests"
+	@echo "  make check-all      - Run all code quality checks"
+
+.PHONY: createdb-test
+createdb-test:
+	@echo "Ensuring test database exists..."
+	@psql -lqt | cut -d \| -f 1 | grep -qw govpn_test || createdb govpn_test
+
+.PHONY: migrate-testdb
+migrate-testdb: createdb-test
+	@echo "Applying migrations to test database..."
+	psql -d govpn_test -f pkg/storage/postgres/migrations/000001_init_test.up.sql

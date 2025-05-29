@@ -436,9 +436,11 @@ func (s *PostgresStorage) withTx(ctx context.Context, fn func(pgx.Tx) error) err
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
 
 	if err := fn(tx); err != nil {
+		if rbErr := tx.Rollback(ctx); rbErr != nil {
+			return fmt.Errorf("tx error: %v, rollback error: %v", err, rbErr)
+		}
 		return err
 	}
 
