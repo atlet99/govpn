@@ -545,3 +545,111 @@ GoVPN is distributed under the [MIT](./LICENSE) license.
 - **Enterprise setup**: Read [deploy/README.md](deploy/README.md) for LDAP/OIDC integration
 - **Anti-censorship**: Configure traffic obfuscation with [deploy/obfuscation.conf](deploy/obfuscation.conf)
 - **Full demo**: Run `cd examples && go run obfuscation_demo.go` to see everything in action! 
+
+## Storage
+
+The storage package provides a flexible and extensible data persistence layer for GoVPN. It implements a clean interface that can be backed by different storage engines.
+
+### Features
+
+- Clean interface design with clear separation of concerns
+- PostgreSQL implementation with connection pooling
+- Support for transactions
+- Database migrations
+- Optimized queries with proper indexing
+- Comprehensive test coverage
+
+### Data Models
+
+#### User
+- ID
+- Username
+- Email
+- Password (hashed)
+- Role
+- Status
+- Last login time
+- Created/Updated timestamps
+
+#### Certificate
+- ID
+- Type (CA, server, client)
+- Common Name
+- Serial number
+- Validity period
+- Revocation status
+- Revocation reason
+- Created/Updated timestamps
+
+#### Connection
+- ID
+- Client ID
+- Username
+- IP Address
+- Virtual IP
+- Traffic statistics
+- Connection time
+- Last activity
+- Obfuscation method
+- Protocol
+- Client version
+
+### Operations
+
+The storage interface supports the following operations:
+
+#### User Management
+- Create user
+- Get user by ID and username
+- Update user
+- Delete user
+- List users with pagination
+- Count total users
+
+#### Certificate Management
+- Create certificate
+- Get certificate by ID and serial number
+- Update certificate
+- Revoke certificate with reason
+- List certificates by type with pagination
+- Count certificates by type
+
+#### Connection Management
+- Create connection record
+- Get connection info
+- Update connection
+- Delete connection
+- List active connections with pagination
+- Count active connections
+- Update connection statistics
+
+### Usage
+
+```go
+// Create a new PostgreSQL storage instance
+config := storage.Config{
+    Host:     "localhost",
+    Port:     5432,
+    User:     "govpn",
+    Password: "secret",
+    Database: "govpn",
+    SSLMode:  "disable",
+    MaxConns: 10,
+    MinConns: 2,
+}
+
+store, err := postgres.New(config)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Use the storage interface
+ctx := context.Background()
+user := &storage.User{
+    Username: "john",
+    Email:    "john@example.com",
+    Role:     "user",
+}
+
+err = store.CreateUser(ctx, user)
+``` 
