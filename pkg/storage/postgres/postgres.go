@@ -3,6 +3,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -222,12 +223,14 @@ func (t *PostgresTransaction) GetCertificate(ctx context.Context, id string) (*s
 		FROM certificates WHERE id = $1
 	`
 	var cert storage.Certificate
+	var revokeReason sql.NullString
 	err := t.tx.QueryRow(ctx, query, id).Scan(
 		&cert.ID, &cert.Type, &cert.CommonName, &cert.Serial,
 		&cert.NotBefore, &cert.NotAfter, &cert.Revoked,
-		&cert.RevokedAt, &cert.RevokeReason,
+		&cert.RevokedAt, &revokeReason,
 		&cert.CreatedAt, &cert.UpdatedAt,
 	)
+	cert.RevokeReason = revokeReason
 	if err == pgx.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
@@ -241,16 +244,21 @@ func (t *PostgresTransaction) GetCertificateBySerial(ctx context.Context, serial
 		FROM certificates WHERE serial = $1
 	`
 	var cert storage.Certificate
+	var revokeReason sql.NullString
 	err := t.tx.QueryRow(ctx, query, serial).Scan(
 		&cert.ID, &cert.Type, &cert.CommonName, &cert.Serial,
 		&cert.NotBefore, &cert.NotAfter, &cert.Revoked,
-		&cert.RevokedAt, &cert.RevokeReason,
+		&cert.RevokedAt, &revokeReason,
 		&cert.CreatedAt, &cert.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
-	return &cert, err
+	if err != nil {
+		return nil, err
+	}
+	cert.RevokeReason = revokeReason
+	return &cert, nil
 }
 
 // UpdateCertificate updates an existing certificate
@@ -336,7 +344,7 @@ func (t *PostgresTransaction) CreateConnection(ctx context.Context, conn *storag
 // GetConnection retrieves a connection by ID
 func (t *PostgresTransaction) GetConnection(ctx context.Context, id string) (*storage.Connection, error) {
 	query := `
-		SELECT id, client_id, username, ip_address, virtual_ip, bytes_in, bytes_out,
+		SELECT id, client_id, username, host(ip_address), host(virtual_ip), bytes_in, bytes_out,
 			connected_at, last_activity, obfuscation, protocol, client_version
 		FROM connections WHERE id = $1
 	`
@@ -382,7 +390,7 @@ func (t *PostgresTransaction) DeleteConnection(ctx context.Context, id string) e
 // ListConnections retrieves a list of connections with pagination
 func (t *PostgresTransaction) ListConnections(ctx context.Context, offset, limit int) ([]*storage.Connection, error) {
 	query := `
-		SELECT id, client_id, username, ip_address, virtual_ip, bytes_in, bytes_out,
+		SELECT id, client_id, username, host(ip_address), host(virtual_ip), bytes_in, bytes_out,
 			connected_at, last_activity, obfuscation, protocol, client_version
 		FROM connections
 		ORDER BY last_activity DESC
@@ -542,16 +550,21 @@ func (s *PostgresStorage) GetCertificate(ctx context.Context, id string) (*stora
 		FROM certificates WHERE id = $1
 	`
 	var cert storage.Certificate
+	var revokeReason sql.NullString
 	err := s.pool.QueryRow(ctx, query, id).Scan(
 		&cert.ID, &cert.Type, &cert.CommonName, &cert.Serial,
 		&cert.NotBefore, &cert.NotAfter, &cert.Revoked,
-		&cert.RevokedAt, &cert.RevokeReason,
+		&cert.RevokedAt, &revokeReason,
 		&cert.CreatedAt, &cert.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
-	return &cert, err
+	if err != nil {
+		return nil, err
+	}
+	cert.RevokeReason = revokeReason
+	return &cert, nil
 }
 
 func (s *PostgresStorage) GetCertificateBySerial(ctx context.Context, serial string) (*storage.Certificate, error) {
@@ -560,16 +573,21 @@ func (s *PostgresStorage) GetCertificateBySerial(ctx context.Context, serial str
 		FROM certificates WHERE serial = $1
 	`
 	var cert storage.Certificate
+	var revokeReason sql.NullString
 	err := s.pool.QueryRow(ctx, query, serial).Scan(
 		&cert.ID, &cert.Type, &cert.CommonName, &cert.Serial,
 		&cert.NotBefore, &cert.NotAfter, &cert.Revoked,
-		&cert.RevokedAt, &cert.RevokeReason,
+		&cert.RevokedAt, &revokeReason,
 		&cert.CreatedAt, &cert.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, storage.ErrNotFound
 	}
-	return &cert, err
+	if err != nil {
+		return nil, err
+	}
+	cert.RevokeReason = revokeReason
+	return &cert, nil
 }
 
 func (s *PostgresStorage) UpdateCertificate(ctx context.Context, cert *storage.Certificate) error {
@@ -633,7 +651,7 @@ func (s *PostgresStorage) CreateConnection(ctx context.Context, conn *storage.Co
 
 func (s *PostgresStorage) GetConnection(ctx context.Context, id string) (*storage.Connection, error) {
 	query := `
-		SELECT id, client_id, username, ip_address, virtual_ip, bytes_in, bytes_out,
+		SELECT id, client_id, username, host(ip_address), host(virtual_ip), bytes_in, bytes_out,
 			connected_at, last_activity, obfuscation, protocol, client_version
 		FROM connections WHERE id = $1
 	`
@@ -666,7 +684,7 @@ func (s *PostgresStorage) DeleteConnection(ctx context.Context, id string) error
 
 func (s *PostgresStorage) ListConnections(ctx context.Context, offset, limit int) ([]*storage.Connection, error) {
 	query := `
-		SELECT id, client_id, username, ip_address, virtual_ip, bytes_in, bytes_out,
+		SELECT id, client_id, username, host(ip_address), host(virtual_ip), bytes_in, bytes_out,
 			connected_at, last_activity, obfuscation, protocol, client_version
 		FROM connections
 		ORDER BY last_activity DESC

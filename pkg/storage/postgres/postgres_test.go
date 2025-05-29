@@ -145,7 +145,7 @@ func TestCertificateOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, retrievedCert.Revoked)
 	assert.NotZero(t, retrievedCert.RevokedAt)
-	assert.Equal(t, "test revocation", retrievedCert.RevokeReason)
+	assert.Equal(t, "test revocation", retrievedCert.RevokeReason.String)
 
 	// Test ListCertificates
 	certs, err := store.ListCertificates(ctx, "client", 0, 10)

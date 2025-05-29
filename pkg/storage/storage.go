@@ -3,35 +3,36 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 // User represents a system user
 type User struct {
-	ID        string    `json:"id"`
-	Username  string    `json:"username"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // Never expose password in JSON
-	Role      string    `json:"role"`
-	Status    string    `json:"status"`
-	LastLogin time.Time `json:"last_login"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        string       `json:"id"`
+	Username  string       `json:"username"`
+	Email     string       `json:"email"`
+	Password  string       `json:"-"` // Never expose password in JSON
+	Role      string       `json:"role"`
+	Status    string       `json:"status"`
+	LastLogin sql.NullTime `json:"last_login"`
+	CreatedAt time.Time    `json:"created_at"`
+	UpdatedAt time.Time    `json:"updated_at"`
 }
 
 // Certificate represents a TLS certificate
 type Certificate struct {
-	ID           string    `json:"id"`
-	Type         string    `json:"type"` // ca, server, client
-	CommonName   string    `json:"common_name"`
-	Serial       string    `json:"serial"`
-	NotBefore    time.Time `json:"not_before"`
-	NotAfter     time.Time `json:"not_after"`
-	Revoked      bool      `json:"revoked"`
-	RevokedAt    time.Time `json:"revoked_at,omitempty"`
-	RevokeReason string    `json:"revoke_reason,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string         `json:"id"`
+	Type         string         `json:"type"` // ca, server, client
+	CommonName   string         `json:"common_name"`
+	Serial       string         `json:"serial"`
+	NotBefore    time.Time      `json:"not_before"`
+	NotAfter     time.Time      `json:"not_after"`
+	Revoked      bool           `json:"revoked"`
+	RevokedAt    sql.NullTime   `json:"revoked_at,omitempty"`
+	RevokeReason sql.NullString `json:"revoke_reason,omitempty"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
 // Connection represents an active VPN connection
@@ -39,8 +40,8 @@ type Connection struct {
 	ID            string    `json:"id"`
 	ClientID      string    `json:"client_id"`
 	Username      string    `json:"username"`
-	IPAddress     string    `json:"ip_address"`
-	VirtualIP     string    `json:"virtual_ip"`
+	IPAddress     string    `json:"ip_address"` // INET, приводить к тексту в SQL
+	VirtualIP     string    `json:"virtual_ip"` // INET, приводить к тексту в SQL
 	BytesIn       int64     `json:"bytes_in"`
 	BytesOut      int64     `json:"bytes_out"`
 	ConnectedAt   time.Time `json:"connected_at"`
