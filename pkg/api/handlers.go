@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/atlet99/govpn/pkg/auth"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -59,6 +60,29 @@ type Response struct {
 	Message string      `json:"message,omitempty"`
 	Data    interface{} `json:"data,omitempty"`
 	Error   string      `json:"error,omitempty"`
+}
+
+// LoginRequest represents login request
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	MFACode  string `json:"mfa_code,omitempty"`
+}
+
+// LoginResponse represents login response
+type LoginResponse struct {
+	Token        string                 `json:"token"`
+	RefreshToken string                 `json:"refresh_token,omitempty"`
+	User         *auth.User             `json:"user"`
+	RequiresMFA  bool                   `json:"requires_mfa"`
+	MFAChallenge *auth.TOTPData         `json:"mfa_challenge,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// OIDCAuthRequest represents OIDC authentication request
+type OIDCAuthRequest struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
 }
 
 // rateLimiter implements a simple rate limiting mechanism
@@ -707,11 +731,262 @@ func validateUserData(data map[string]interface{}) error {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if data != nil {
-		if err := json.NewEncoder(w).Encode(data); err != nil {
-			log.Printf("Error encoding JSON: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Error encoding JSON response: %v", err)
+	}
+}
+
+// handleLogin handles user login with password/username
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{
+			Success: false,
+			Error:   "Method not allowed",
+		})
+		return
+	}
+
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "Invalid request body",
+		})
+		return
+	}
+
+	// Validate input
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "Username and password are required",
+		})
+		return
+	}
+
+	// Authenticate user
+	authResult, err := s.authManager.AuthenticateUser(req.Username, req.Password)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Handle MFA if required
+	if authResult.RequiresMFA {
+		if req.MFACode == "" {
+			// Return MFA challenge
+			writeJSON(w, http.StatusOK, Response{
+				Success: true,
+				Data: LoginResponse{
+					RequiresMFA:  true,
+					MFAChallenge: authResult.MFAChallenge,
+					User:         authResult.User,
+				},
+			})
+			return
+		}
+
+		// Validate MFA code
+		mfaResult, err := s.authManager.ValidateMFA(req.Username, req.MFACode)
+		if err != nil || !mfaResult.Valid {
+			writeJSON(w, http.StatusUnauthorized, Response{
+				Success: false,
+				Error:   "Invalid MFA code",
+			})
 			return
 		}
 	}
+
+	// Generate JWT token
+	token, err := s.generateJWTToken(authResult.User)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   "Failed to generate token",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Data: LoginResponse{
+			Token:    token,
+			User:     authResult.User,
+			Metadata: authResult.Metadata,
+		},
+	})
+}
+
+// handleOIDCAuth handles OIDC authentication initiation
+func (s *Server) handleOIDCAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{
+			Success: false,
+			Error:   "Method not allowed",
+		})
+		return
+	}
+
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		userID = "web-user-" + fmt.Sprintf("%d", time.Now().Unix())
+	}
+
+	authURL, err := s.authManager.GetOIDCAuthURL(userID)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Data: map[string]string{
+			"auth_url": authURL,
+			"user_id":  userID,
+		},
+	})
+}
+
+// handleOIDCCallback handles OIDC callback
+func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{
+			Success: false,
+			Error:   "Method not allowed",
+		})
+		return
+	}
+
+	var req OIDCAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, Response{
+			Success: false,
+			Error:   "Invalid request body",
+		})
+		return
+	}
+
+	// Handle OIDC callback
+	session, err := s.authManager.HandleOIDCCallback(req.Code, req.State)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Authenticate OIDC user
+	authResult, err := s.authManager.AuthenticateOIDCUser(session)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Generate JWT token
+	token, err := s.generateJWTToken(authResult.User)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, Response{
+			Success: false,
+			Error:   "Failed to generate token",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Data: LoginResponse{
+			Token:    token,
+			User:     authResult.User,
+			Metadata: authResult.Metadata,
+		},
+	})
+}
+
+// generateJWTToken generates JWT token for user
+func (s *Server) generateJWTToken(user *auth.User) (string, error) {
+	claims := jwt.MapClaims{
+		"sub":      user.ID,
+		"username": user.Username,
+		"roles":    user.Roles,
+		"source":   user.Source,
+		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+		"iat":      time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.config.JWTSecret))
+}
+
+// handleAuthStatus returns current authentication status
+func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, Response{
+			Success: false,
+			Error:   "Method not allowed",
+		})
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   "Authorization header required",
+		})
+		return
+	}
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   "Invalid authorization format",
+		})
+		return
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(s.config.JWTSecret), nil
+	})
+
+	if err != nil || !token.Valid {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   "Invalid token",
+		})
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, Response{
+			Success: false,
+			Error:   "Invalid token claims",
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Response{
+		Success: true,
+		Data: map[string]interface{}{
+			"authenticated": true,
+			"user_id":       claims["sub"],
+			"username":      claims["username"],
+			"roles":         claims["roles"],
+			"source":        claims["source"],
+		},
+	})
 }

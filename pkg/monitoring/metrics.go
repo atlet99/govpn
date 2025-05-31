@@ -325,7 +325,7 @@ func (m *MetricsCollector) StartMetricsServer(ctx context.Context, addr string) 
 	mux.Handle("/metrics", m.Handler())
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK")) // Ignore write error in health check
 	})
 
 	server := &http.Server{
@@ -335,9 +335,12 @@ func (m *MetricsCollector) StartMetricsServer(ctx context.Context, addr string) 
 		WriteTimeout: 10 * time.Second,
 	}
 
+	// Graceful shutdown
 	go func() {
 		<-ctx.Done()
-		server.Shutdown(context.Background())
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx) // Ignore shutdown error
 	}()
 
 	return server.ListenAndServe()

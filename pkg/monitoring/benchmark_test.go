@@ -201,10 +201,9 @@ func TestPerformanceUnderLoad(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start metrics server in background
 	go func() {
-		if err := metrics.StartMetricsServer(ctx, ":0"); err != nil {
-			t.Logf("Metrics server error: %v", err)
-		}
+		_ = metrics.StartMetricsServer(ctx, ":0") // Random port - ignore error in test
 	}()
 
 	// Create load
@@ -284,7 +283,10 @@ func Example() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	go metrics.StartMetricsServer(ctx, ":0") // Random port
+	// Start metrics server in background
+	go func() {
+		_ = metrics.StartMetricsServer(ctx, ":0") // Random port - ignore error in test
+	}()
 
 	// Emulate activity
 	monitor.OnConnectionStart("user1", "udp")

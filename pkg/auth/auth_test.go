@@ -587,3 +587,215 @@ func BenchmarkAuthenticateUser(b *testing.B) {
 		}
 	}
 }
+
+// TestOIDCFallbackLogic tests OIDC fallback authentication logic
+func TestOIDCFallbackLogic(t *testing.T) {
+	config := DefaultAuthConfig()
+	config.EnableOIDC = true
+	config.OIDCPrimary = true
+	config.AllowPasswordFallback = true
+	config.AdminUsernames = []string{"admin"}
+
+	am, err := NewAuthManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create AuthManager: %v", err)
+	}
+
+	// Create admin user
+	_, err = am.CreateUser("admin", "admin123")
+	if err != nil {
+		t.Fatalf("Failed to create admin user: %v", err)
+	}
+	err = am.AddUserRole("admin", "admin")
+	if err != nil {
+		t.Fatalf("Failed to add admin role: %v", err)
+	}
+
+	// Create regular user
+	_, err = am.CreateUser("user", "user123")
+	if err != nil {
+		t.Fatalf("Failed to create regular user: %v", err)
+	}
+
+	// Test 1: Regular user should not be able to authenticate with password when OIDC is primary
+	_, err = am.AuthenticateUser("user", "user123")
+	if err == nil {
+		t.Error("Regular user should not be able to authenticate with password when OIDC is primary")
+	}
+
+	// Test 2: Admin user should be able to authenticate with password when fallback is enabled
+	result, err := am.AuthenticateUser("admin", "admin123")
+	if err != nil {
+		t.Errorf("Admin user should be able to authenticate with password: %v", err)
+	}
+	if result.User.Username != "admin" {
+		t.Errorf("Expected admin user, got %s", result.User.Username)
+	}
+
+	// Test 3: Disable password fallback completely
+	config.AllowPasswordFallback = false
+	am.config = config
+
+	_, err = am.AuthenticateUser("admin", "admin123")
+	if err == nil {
+		t.Error("Admin user should not be able to authenticate when password fallback is disabled")
+	}
+}
+
+// TestOIDCUserCreation tests OIDC user creation and update
+func TestOIDCUserCreation(t *testing.T) {
+	config := DefaultAuthConfig()
+	config.EnableOIDC = true
+
+	am, err := NewAuthManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create AuthManager: %v", err)
+	}
+
+	// Mock OIDC session
+	session := &OIDCSession{
+		UserID:   "oidc-user-123",
+		Username: "john.doe",
+		Email:    "john.doe@company.com",
+		Claims: map[string]interface{}{
+			"sub":   "oidc-user-123",
+			"email": "john.doe@company.com",
+		},
+		Groups: []string{"users", "developers"},
+		Roles:  []string{"user", "developer"},
+	}
+
+	// Test user creation from OIDC session
+	result, err := am.AuthenticateOIDCUser(session)
+	if err != nil {
+		t.Fatalf("Failed to authenticate OIDC user: %v", err)
+	}
+
+	if result.User.Username != "john.doe" {
+		t.Errorf("Expected username john.doe, got %s", result.User.Username)
+	}
+
+	if result.User.Source != "oidc" {
+		t.Errorf("Expected source oidc, got %s", result.User.Source)
+	}
+
+	if result.Source != "oidc" {
+		t.Errorf("Expected auth source oidc, got %s", result.Source)
+	}
+
+	// Test user update on subsequent authentication
+	session.Email = "john.doe.updated@company.com"
+	session.Groups = append(session.Groups, "admin")
+	session.Roles = append(session.Roles, "admin")
+
+	result, err = am.AuthenticateOIDCUser(session)
+	if err != nil {
+		t.Fatalf("Failed to update OIDC user: %v", err)
+	}
+
+	// Check if admin role was added
+	hasAdminRole := false
+	for _, role := range result.User.Roles {
+		if role == "admin" {
+			hasAdminRole = true
+			break
+		}
+	}
+	if !hasAdminRole {
+		t.Error("User should have admin role after OIDC update")
+	}
+}
+
+// TestAdminUserDetection tests admin user detection logic
+func TestAdminUserDetection(t *testing.T) {
+	config := DefaultAuthConfig()
+	config.AdminUsernames = []string{"sysadmin", "root"}
+
+	am, err := NewAuthManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create AuthManager: %v", err)
+	}
+
+	// Test 1: User in admin usernames list
+	if !am.isAdminUser("sysadmin") {
+		t.Error("sysadmin should be detected as admin user")
+	}
+
+	// Test 2: Create user with admin role
+	_, err = am.CreateUser("localadmin", "password123")
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+	err = am.AddUserRole("localadmin", "admin")
+	if err != nil {
+		t.Fatalf("Failed to add admin role: %v", err)
+	}
+
+	if !am.isAdminUser("localadmin") {
+		t.Error("localadmin should be detected as admin user")
+	}
+
+	// Test 3: Regular user
+	_, err = am.CreateUser("regularuser", "password123")
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+	}
+
+	if am.isAdminUser("regularuser") {
+		t.Error("regularuser should not be detected as admin user")
+	}
+
+	// Test 4: Non-existent user
+	if am.isAdminUser("nonexistent") {
+		t.Error("non-existent user should not be detected as admin user")
+	}
+}
+
+// TestMFARequirementForAdmins tests MFA requirement for admin users
+func TestMFARequirementForAdmins(t *testing.T) {
+	config := DefaultAuthConfig()
+	config.RequireAdminMFA = true
+	config.AdminUsernames = []string{"admin"}
+
+	am, err := NewAuthManager(config)
+	if err != nil {
+		t.Fatalf("Failed to create AuthManager: %v", err)
+	}
+
+	// Create admin user
+	_, err = am.CreateUser("admin", "admin123")
+	if err != nil {
+		t.Fatalf("Failed to create admin user: %v", err)
+	}
+	err = am.AddUserRole("admin", "admin")
+	if err != nil {
+		t.Fatalf("Failed to add admin role: %v", err)
+	}
+
+	// Create regular user
+	_, err = am.CreateUser("user", "user123")
+	if err != nil {
+		t.Fatalf("Failed to create regular user: %v", err)
+	}
+
+	// Test admin user requires MFA
+	result, err := am.AuthenticateUser("admin", "admin123")
+	if err != nil {
+		t.Fatalf("Failed to authenticate admin user: %v", err)
+	}
+
+	if !result.RequiresMFA {
+		t.Error("Admin user should require MFA when RequireAdminMFA is enabled")
+	}
+
+	// Test regular user doesn't require MFA (unless configured separately)
+	result, err = am.AuthenticateUser("user", "user123")
+	if err != nil {
+		t.Fatalf("Failed to authenticate regular user: %v", err)
+	}
+
+	// Should not require MFA for regular user unless MFA provider is configured
+	if result.RequiresMFA && am.mfaProvider == nil {
+		t.Error("Regular user should not require MFA when MFA provider is not configured")
+	}
+}

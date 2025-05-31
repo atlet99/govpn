@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/atlet99/govpn/pkg/api"
+	"github.com/atlet99/govpn/pkg/auth"
 	"github.com/atlet99/govpn/pkg/core"
 )
 
@@ -74,6 +75,16 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Start API server if enabled
 	if s.config.EnableAPI && s.config.VPNConfig.EnableAPI {
+		// Create auth manager with default config
+		authConfig := auth.DefaultAuthConfig()
+		authManager, err := auth.NewAuthManager(authConfig)
+		if err != nil {
+			if stopErr := s.vpn.Stop(); stopErr != nil {
+				log.Printf("Error stopping VPN server after auth manager creation failed: %v", stopErr)
+			}
+			return fmt.Errorf("failed to create auth manager: %w", err)
+		}
+
 		apiConfig := api.Config{
 			ListenAddress: s.config.VPNConfig.APIListenAddress,
 			Port:          s.config.VPNConfig.APIPort,
@@ -84,7 +95,7 @@ func (s *Server) Start(ctx context.Context) error {
 			WriteTimeout:  DefaultAPIWriteTimeout,
 		}
 
-		s.api = api.NewServer(apiConfig, s.vpn)
+		s.api = api.NewServer(apiConfig, s.vpn, authManager)
 		if err := s.api.Start(); err != nil {
 			if stopErr := s.vpn.Stop(); stopErr != nil {
 				log.Printf("Error stopping VPN server after API server start failed: %v", stopErr)

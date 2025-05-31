@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/atlet99/govpn/pkg/auth"
 	"github.com/atlet99/govpn/pkg/core"
 )
 
@@ -28,6 +29,7 @@ type Server struct {
 	config      Config
 	httpServer  *http.Server
 	vpnServer   *core.OpenVPNServer
+	authManager *auth.AuthManager
 	router      *http.ServeMux
 	wg          sync.WaitGroup
 	running     bool
@@ -59,10 +61,11 @@ func DefaultConfig() Config {
 }
 
 // NewServer creates a new API server
-func NewServer(config Config, vpnServer *core.OpenVPNServer) *Server {
+func NewServer(config Config, vpnServer *core.OpenVPNServer, authManager *auth.AuthManager) *Server {
 	server := &Server{
 		config:      config,
 		vpnServer:   vpnServer,
+		authManager: authManager,
 		router:      http.NewServeMux(),
 		rateLimiter: newRateLimiter(DefaultRateLimitRequests, DefaultRateLimitWindow),
 	}
@@ -121,6 +124,12 @@ func (s *Server) Stop() error {
 // registerRoutes registers all API routes
 func (s *Server) registerRoutes() {
 	base := s.config.BaseURL
+
+	// Authentication endpoints
+	s.router.HandleFunc(base+"/auth/login", s.handleLogin)
+	s.router.HandleFunc(base+"/auth/oidc", s.handleOIDCAuth)
+	s.router.HandleFunc(base+"/auth/oidc/callback", s.handleOIDCCallback)
+	s.router.HandleFunc(base+"/auth/status", s.handleAuthStatus)
 
 	// Status endpoints
 	s.router.HandleFunc(base+"/status", s.handleGetStatus)

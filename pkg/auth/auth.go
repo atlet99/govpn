@@ -45,6 +45,12 @@ type AuthConfig struct {
 	MFA              *MFAConfig  `json:"mfa,omitempty"`
 	OIDC             *OIDCConfig `json:"oidc,omitempty"`
 	LDAP             *LDAPConfig `json:"ldap,omitempty"`
+
+	// OIDC fallback settings
+	OIDCPrimary           bool     `json:"oidc_primary"`            // OIDC is primary auth method
+	AllowPasswordFallback bool     `json:"allow_password_fallback"` // Allow password fallback for admin users
+	AdminUsernames        []string `json:"admin_usernames"`         // List of admin usernames allowed password fallback
+	RequireAdminMFA       bool     `json:"require_admin_mfa"`       // Require MFA for admin users
 }
 
 // DefaultAuthConfig returns default configuration
@@ -154,8 +160,18 @@ func (am *AuthManager) AuthenticateUser(username, password string) (*Authenticat
 	am.mu.RLock()
 	defer am.mu.RUnlock()
 
-	// Try LDAP authentication
-	if am.ldapProvider != nil {
+	// If OIDC is primary and user is not admin, reject password authentication
+	if am.config.EnableOIDC && am.config.OIDCPrimary && !am.isAdminUser(username) {
+		return nil, fmt.Errorf("OIDC authentication required - password authentication disabled for non-admin users")
+	}
+
+	// If OIDC is primary but password fallback is disabled even for admins
+	if am.config.EnableOIDC && am.config.OIDCPrimary && !am.config.AllowPasswordFallback && am.isAdminUser(username) {
+		return nil, fmt.Errorf("OIDC authentication required - password authentication disabled")
+	}
+
+	// Try LDAP authentication (only if not in OIDC-primary mode or user is admin)
+	if am.ldapProvider != nil && (!am.config.OIDCPrimary || am.isAdminUser(username)) {
 		if result, err := am.ldapProvider.Authenticate(username, password); err == nil && result.Success {
 			user := &User{
 				ID:        result.User.Username,
@@ -186,38 +202,52 @@ func (am *AuthManager) AuthenticateUser(username, password string) (*Authenticat
 				authResult.RequiresMFA = true
 			}
 
+			// Force MFA for admin users if required
+			if am.config.RequireAdminMFA && am.isAdminUser(username) {
+				authResult.RequiresMFA = true
+			}
+
 			return authResult, nil
 		}
 	}
 
-	// Local authentication
-	user, exists := am.users[username]
-	if !exists {
-		return nil, fmt.Errorf("user not found: %s", username)
+	// Local authentication (only if not in OIDC-primary mode or user is admin)
+	if !am.config.OIDCPrimary || (am.config.AllowPasswordFallback && am.isAdminUser(username)) {
+		user, exists := am.users[username]
+		if !exists {
+			return nil, fmt.Errorf("user not found: %s", username)
+		}
+
+		if !user.IsActive {
+			return nil, fmt.Errorf("user is inactive: %s", username)
+		}
+
+		if !am.verifyPassword(password, user.PasswordHash, user.Salt) {
+			return nil, fmt.Errorf("invalid password for user: %s", username)
+		}
+
+		// Update last login time
+		user.LastLogin = time.Now()
+
+		authResult := &AuthenticateResult{
+			User:   user,
+			Source: "local",
+		}
+
+		// Check MFA requirement
+		if am.mfaProvider != nil && am.mfaProvider.IsRequired(username) {
+			authResult.RequiresMFA = true
+		}
+
+		// Force MFA for admin users if required
+		if am.config.RequireAdminMFA && am.isAdminUser(username) {
+			authResult.RequiresMFA = true
+		}
+
+		return authResult, nil
 	}
 
-	if !user.IsActive {
-		return nil, fmt.Errorf("user is inactive: %s", username)
-	}
-
-	if !am.verifyPassword(password, user.PasswordHash, user.Salt) {
-		return nil, fmt.Errorf("invalid password for user: %s", username)
-	}
-
-	// Update last login time
-	user.LastLogin = time.Now()
-
-	authResult := &AuthenticateResult{
-		User:   user,
-		Source: "local",
-	}
-
-	// Check MFA requirement
-	if am.mfaProvider != nil && am.mfaProvider.IsRequired(username) {
-		authResult.RequiresMFA = true
-	}
-
-	return authResult, nil
+	return nil, fmt.Errorf("authentication method not allowed for user: %s", username)
 }
 
 // ValidateMFA validates MFA code
@@ -258,6 +288,95 @@ func (am *AuthManager) HandleOIDCCallback(code, state string) (*OIDCSession, err
 		return nil, fmt.Errorf("OIDC is not enabled")
 	}
 	return am.oidcProvider.HandleCallback(code, state)
+}
+
+// AuthenticateOIDCUser creates or updates user from OIDC session
+func (am *AuthManager) AuthenticateOIDCUser(session *OIDCSession) (*AuthenticateResult, error) {
+	am.mu.Lock()
+	defer am.mu.Unlock()
+
+	username := session.Username
+	if username == "" {
+		return nil, fmt.Errorf("username not found in OIDC session")
+	}
+
+	// Check if user already exists
+	user, exists := am.users[username]
+	if !exists {
+		// Create new user from OIDC data
+		user = &User{
+			ID:        generateUserID(),
+			Username:  username,
+			CreatedAt: time.Now(),
+			IsActive:  true,
+			Source:    "oidc",
+			Metadata: map[string]interface{}{
+				"email":       session.Email,
+				"oidc_sub":    session.Claims["sub"],
+				"oidc_groups": session.Groups,
+				"oidc_roles":  session.Roles,
+			},
+		}
+
+		// Set roles from OIDC claims
+		user.Roles = session.Roles
+		if len(user.Roles) == 0 {
+			user.Roles = []string{"user"} // Default role
+		}
+
+		// Check if user should be admin based on OIDC groups/roles
+		if am.isOIDCUserAdmin(session) {
+			user.Roles = append(user.Roles, "admin")
+		}
+
+		am.users[username] = user
+		am.logger.Infof("Created new OIDC user: %s", username)
+	} else {
+		// Update existing user data from OIDC
+		user.LastLogin = time.Now()
+		user.Metadata["email"] = session.Email
+		user.Metadata["oidc_groups"] = session.Groups
+		user.Metadata["oidc_roles"] = session.Roles
+
+		// Update roles from OIDC
+		user.Roles = session.Roles
+		if len(user.Roles) == 0 {
+			user.Roles = []string{"user"}
+		}
+
+		// Check admin status
+		if am.isOIDCUserAdmin(session) && !am.hasRole(user, "admin") {
+			user.Roles = append(user.Roles, "admin")
+		} else if !am.isOIDCUserAdmin(session) && am.hasRole(user, "admin") {
+			// Remove admin role if user no longer has admin groups
+			user.Roles = am.removeRole(user.Roles, "admin")
+		}
+
+		am.logger.Infof("Updated OIDC user: %s", username)
+	}
+
+	authResult := &AuthenticateResult{
+		User:      user,
+		Source:    "oidc",
+		SessionID: session.UserID,
+		Metadata: map[string]interface{}{
+			"oidc_groups": session.Groups,
+			"oidc_roles":  session.Roles,
+			"is_admin":    am.isOIDCUserAdmin(session),
+		},
+	}
+
+	// Check MFA requirement for OIDC users
+	if am.mfaProvider != nil && am.mfaProvider.IsRequired(username) {
+		authResult.RequiresMFA = true
+	}
+
+	// Force MFA for admin users if required
+	if am.config.RequireAdminMFA && am.isOIDCUserAdmin(session) {
+		authResult.RequiresMFA = true
+	}
+
+	return authResult, nil
 }
 
 // GetLDAPUser gets user information from LDAP
@@ -495,4 +614,56 @@ func generateUserID() string {
 	id := make([]byte, 16)
 	_, _ = rand.Read(id) // Ignore error as crypto/rand doesn't return errors under normal conditions
 	return hex.EncodeToString(id)
+}
+
+// isAdminUser checks if a user is an admin
+func (am *AuthManager) isAdminUser(username string) bool {
+	// Check if username is in admin list from config
+	for _, adminUsername := range am.config.AdminUsernames {
+		if adminUsername == username {
+			return true
+		}
+	}
+
+	// Check if user exists locally and has admin role
+	user, exists := am.users[username]
+	if exists {
+		for _, role := range user.Roles {
+			if role == "admin" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// isOIDCUserAdmin checks if a user is an admin based on OIDC groups/roles
+func (am *AuthManager) isOIDCUserAdmin(session *OIDCSession) bool {
+	for _, role := range session.Roles {
+		if role == "admin" {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRole checks if a user has a specific role
+func (am *AuthManager) hasRole(user *User, role string) bool {
+	for _, existingRole := range user.Roles {
+		if existingRole == role {
+			return true
+		}
+	}
+	return false
+}
+
+// removeRole removes a role from a user's roles
+func (am *AuthManager) removeRole(roles []string, role string) []string {
+	for i, existingRole := range roles {
+		if existingRole == role {
+			return append(roles[:i], roles[i+1:]...)
+		}
+	}
+	return roles
 }
