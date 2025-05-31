@@ -2082,13 +2082,13 @@ func TestObfsproxy(t *testing.T) {
 		t.Errorf("Expected method name %s, got %s", MethodObfsproxy, obfs.Name())
 	}
 
-	// Проверяем доступность obfsproxy
-	// Примечание: этот тест может быть пропущен, если obfsproxy не установлен
+	// Check obfsproxy availability
+	// Note: this test may be skipped if obfsproxy is not installed
 	if !obfs.IsAvailable() {
 		t.Skip("Obfsproxy is not available, skipping test")
 	}
 
-	// Тестируем обфускацию данных
+	// Test data obfuscation
 	testData := []byte("VPN traffic test data for obfsproxy")
 
 	obfuscated, err := obfs.Obfuscate(testData)
@@ -2106,7 +2106,7 @@ func TestObfsproxy(t *testing.T) {
 			string(testData), string(deobfuscated))
 	}
 
-	// Проверяем метрики
+	// Check metrics
 	metrics := obfs.GetMetrics()
 	if metrics.PacketsProcessed != 2 {
 		t.Errorf("Expected 2 packets processed, got %d", metrics.PacketsProcessed)
@@ -2116,20 +2116,20 @@ func TestObfsproxy(t *testing.T) {
 		t.Errorf("Expected %d bytes processed, got %d", len(testData)*2, metrics.BytesProcessed)
 	}
 
-	// Тестируем обертку соединения
-	// Создаем тестовое соединение
+	// Test connection wrapper
+	// Create test connection
 	server, client := net.Pipe()
 	defer server.Close()
 	defer client.Close()
 
-	// Оборачиваем клиентское соединение
+	// Wrap client connection
 	wrappedClient, err := obfs.WrapConn(client)
 	if err != nil {
 		t.Fatalf("Failed to wrap connection: %v", err)
 	}
 	defer wrappedClient.Close()
 
-	// Отправляем тестовые данные
+	// Send test data
 	testData = []byte("Test data for wrapped connection")
 	go func() {
 		_, err := wrappedClient.Write(testData)
@@ -2138,7 +2138,7 @@ func TestObfsproxy(t *testing.T) {
 		}
 	}()
 
-	// Читаем данные на серверной стороне
+	// Read data on server side
 	buf := make([]byte, 1024)
 	n, err := server.Read(buf)
 	if err != nil {

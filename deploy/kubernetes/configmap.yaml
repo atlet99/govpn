@@ -1,0 +1,101 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: govpn-config
+  namespace: govpn
+  labels:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: vpn-server
+data:
+  server.conf: |
+    # GoVPN Server Configuration for Kubernetes
+    port 1194
+    proto udp
+    dev tun
+    
+    # Networking
+    server 10.8.0.0 255.255.255.0
+    ifconfig-pool-persist /etc/govpn/ipp.txt
+    push "redirect-gateway def1 bypass-dhcp"
+    push "dhcp-option DNS 8.8.8.8"
+    push "dhcp-option DNS 8.8.4.4"
+    
+    # Security
+    ca /etc/govpn/certs/ca.crt
+    cert /etc/govpn/certs/server.crt
+    key /etc/govpn/certs/server.key
+    dh /etc/govpn/certs/dh.pem
+    tls-auth /etc/govpn/certs/ta.key 0
+    
+    # Cipher and authentication
+    cipher AES-256-GCM
+    auth SHA256
+    
+    # Logging and status
+    status /var/log/govpn/openvpn-status.log
+    log-append /var/log/govpn/openvpn.log
+    verb 3
+    mute 20
+    
+    # Kubernetes specific
+    persist-key
+    persist-tun
+    user nobody
+    group nogroup
+    
+    # Enable monitoring
+    management 127.0.0.1 7505
+    
+  logging.conf: |
+    # Logging configuration
+    level: info
+    format: json
+    output: stdout
+    max_size: 100
+    max_backups: 3
+    max_age: 28
+    compress: true
+    enable_openvpn_compat: false
+    
+  monitoring.conf: |
+    # Monitoring configuration
+    metrics:
+      enabled: true
+      port: 9100
+      path: /metrics
+    
+    performance:
+      enabled: true
+      interval: 30s
+    
+    alerts:
+      enabled: true
+      check_interval: 30s
+      
+    health_check:
+      enabled: true
+      port: 8080
+      path: /health
+      
+  obfuscation.conf: |
+    # Obfuscation configuration for Kubernetes
+    enabled: true
+    primary_method: "xor_cipher"
+    fallback_methods: ["tls_tunnel", "http_mimicry"]
+    auto_detection: true
+    
+    # Regional profiles
+    profiles:
+      default:
+        methods: ["xor_cipher", "tls_tunnel"]
+        switch_threshold: 0.7
+      china:
+        methods: ["http_mimicry", "dns_tunnel", "tls_tunnel"]
+        switch_threshold: 0.8
+      iran:
+        methods: ["tls_tunnel", "http_mimicry"]
+        switch_threshold: 0.9
+      russia:
+        methods: ["http_mimicry", "dns_tunnel"]
+        switch_threshold: 0.8 

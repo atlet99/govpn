@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: govpn
+  labels:
+    name: govpn
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: vpn-server
+    app.kubernetes.io/part-of: govpn-platform
+    app.kubernetes.io/managed-by: kubectl 

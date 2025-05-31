@@ -40,8 +40,8 @@ type Connection struct {
 	ID            string    `json:"id"`
 	ClientID      string    `json:"client_id"`
 	Username      string    `json:"username"`
-	IPAddress     string    `json:"ip_address"` // INET, приводить к тексту в SQL
-	VirtualIP     string    `json:"virtual_ip"` // INET, приводить к тексту в SQL
+	IPAddress     string    `json:"ip_address"` // INET, convert to text in SQL
+	VirtualIP     string    `json:"virtual_ip"` // INET, convert to text in SQL
 	BytesIn       int64     `json:"bytes_in"`
 	BytesOut      int64     `json:"bytes_out"`
 	ConnectedAt   time.Time `json:"connected_at"`

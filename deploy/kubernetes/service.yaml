@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: govpn-server
+  namespace: govpn
+  labels:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: vpn-server
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+    prometheus.io/path: "/metrics"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: vpn-udp
+    port: 1194
+    targetPort: vpn-udp
+    protocol: UDP
+  - name: metrics
+    port: 9100
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: 8080
+    targetPort: health
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: vpn-server
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: govpn-metrics
+  namespace: govpn
+  labels:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: metrics
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9100
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: vpn-server
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: govpn-health
+  namespace: govpn
+  labels:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: health
+spec:
+  type: ClusterIP
+  ports:
+  - name: health
+    port: 8080
+    targetPort: health
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: govpn
+    app.kubernetes.io/instance: govpn
+    app.kubernetes.io/component: vpn-server 

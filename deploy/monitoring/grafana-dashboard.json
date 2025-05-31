@@ -1,0 +1,381 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "GoVPN Server Monitoring",
+    "tags": ["govpn", "vpn", "monitoring"],
+    "style": "dark",
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Active Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "govpn_active_connections",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 50
+                },
+                {
+                  "color": "red",
+                  "value": 100
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Total Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "govpn_total_connections",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Memory Usage",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "govpn_memory_usage_bytes / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "MB",
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 256
+                },
+                {
+                  "color": "red",
+                  "value": 512
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "title": "Goroutines",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "govpn_goroutines",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {
+                  "color": "green",
+                  "value": null
+                },
+                {
+                  "color": "yellow",
+                  "value": 500
+                },
+                {
+                  "color": "red",
+                  "value": 1000
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 6,
+          "x": 18,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "title": "Connection Duration",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(govpn_connection_duration_seconds_sum[5m]) / rate(govpn_connection_duration_seconds_count[5m])",
+            "refId": "A",
+            "legendFormat": "Average Duration"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 6,
+        "title": "Traffic (Bytes/sec)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(govpn_bytes_received_total[5m])",
+            "refId": "A",
+            "legendFormat": "Received"
+          },
+          {
+            "expr": "rate(govpn_bytes_sent_total[5m])",
+            "refId": "B",
+            "legendFormat": "Sent"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "Bps"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "Obfuscation Methods Usage",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "govpn_obfuscation_methods_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 8,
+        "title": "Authentication Attempts",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(govpn_auth_attempts_total{result=\"success\"}[5m])",
+            "refId": "A",
+            "legendFormat": "Successful"
+          },
+          {
+            "expr": "rate(govpn_auth_attempts_total{result=\"failure\"}[5m])",
+            "refId": "B",
+            "legendFormat": "Failed"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 8,
+          "y": 16
+        }
+      },
+      {
+        "id": 9,
+        "title": "DPI Detections",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(govpn_dpi_detections_total[5m])",
+            "refId": "A",
+            "legendFormat": "DPI Detections/sec"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "continuous-RedYlGr"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 8,
+          "x": 16,
+          "y": 16
+        }
+      },
+      {
+        "id": 10,
+        "title": "Protocol Versions",
+        "type": "bargauge",
+        "targets": [
+          {
+            "expr": "govpn_protocol_versions_total",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 11,
+        "title": "Network Errors",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(govpn_network_errors_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "palette-classic"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 24
+        }
+      },
+      {
+        "id": 12,
+        "title": "Certificate Status",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "govpn_certificates_total",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 13,
+        "title": "Obfuscation Latency",
+        "type": "histogram",
+        "targets": [
+          {
+            "expr": "govpn_obfuscation_latency_seconds",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s"
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(govpn_active_connections, instance)",
+          "refresh": 1,
+          "options": [],
+          "includeAll": true,
+          "allValue": ".*"
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "name": "Alerts",
+          "enable": true,
+          "iconColor": "red",
+          "query": "ALERTS{alertname=~\".*govpn.*\"}"
+        }
+      ]
+    }
+  }
+} 
