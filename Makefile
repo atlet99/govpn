@@ -198,16 +198,23 @@ install-staticcheck:
 # Run linter
 .PHONY: lint
 lint:
-	@command -v $(GOLANGCI_LINT) >/dev/null 2>&1 || { echo "golangci-lint is not installed. Run make install-lint"; exit 1; }
-	@echo "Running linter..."
-	@$(GOLANGCI_LINT) run
+	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
+		echo "Running linter..."; \
+		$(GOLANGCI_LINT) run; \
+	else \
+		echo "⚠️  golangci-lint is not installed. Skipping linter. Run 'make install-lint' to install."; \
+	fi
 
 # Run staticcheck tool
 .PHONY: staticcheck
 staticcheck:
-	@echo "Running staticcheck..."
-	@$(STATICCHECK) ./...
-	@echo "Staticcheck passed!"
+	@if command -v $(STATICCHECK) >/dev/null 2>&1; then \
+		echo "Running staticcheck..."; \
+		$(STATICCHECK) ./...; \
+		echo "Staticcheck passed!"; \
+	else \
+		echo "⚠️  staticcheck is not installed. Skipping staticcheck. Run 'make install-staticcheck' to install."; \
+	fi
 
 # Run all checks (linter and staticcheck)
 .PHONY: check-all

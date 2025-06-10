@@ -69,14 +69,14 @@
 
 ### Phase 3 Benchmark Results
 
-| Component | Operations/sec | Time/operation | Memory/operation |
-|-----------|---------------|----------------|------------------|
-| MetricsCollector | ~1,800,000 | 555ns | 0B |
-| Logger (JSON) | ~690,000 | 1445ns | 529B |
-| Logger (Text) | ~720,000 | 1394ns | 416B |
-| Logger (OpenVPN) | ~635,000 | 1573ns | 2027B |
-| PerformanceMonitor | ~5,000,000 | 197ns | 0B |
-| AlertManager | ~43,000 | 23μs | 1472B |
+| Component          | Operations/sec | Time/operation | Memory/operation |
+| ------------------ | -------------- | -------------- | ---------------- |
+| MetricsCollector   | ~1,800,000     | 555ns          | 0B               |
+| Logger (JSON)      | ~690,000       | 1445ns         | 529B             |
+| Logger (Text)      | ~720,000       | 1394ns         | 416B             |
+| Logger (OpenVPN)   | ~635,000       | 1573ns         | 2027B            |
+| PerformanceMonitor | ~5,000,000     | 197ns          | 0B               |
+| AlertManager       | ~43,000        | 23μs           | 1472B            |
 
 ### Monitoring Architecture
 
@@ -110,28 +110,28 @@ GoVPN aims to become an **evolution of OpenVPN**, preserving its time-tested con
 
 ## Hybrid Approach: Preserving the Best of OpenVPN
 
-| Aspect | What we preserve from OpenVPN | What we improve in GoVPN |
-|--------|-------------------------------|--------------------------|
-| Protocol | Basic OpenVPN protocol for compatibility | Go packet processing optimization |
-| Configuration | Configuration file format | Additional options and simplified management |
-| PKI Infrastructure | Certificate handling principles | Modern cryptographic primitives |
-| Client compatibility | Support for existing OpenVPN clients | New optimized Go client |
-| Security model | Basic trust model | Extended authentication capabilities |
+| Aspect               | What we preserve from OpenVPN            | What we improve in GoVPN                     |
+| -------------------- | ---------------------------------------- | -------------------------------------------- |
+| Protocol             | Basic OpenVPN protocol for compatibility | Go packet processing optimization            |
+| Configuration        | Configuration file format                | Additional options and simplified management |
+| PKI Infrastructure   | Certificate handling principles          | Modern cryptographic primitives              |
+| Client compatibility | Support for existing OpenVPN clients     | New optimized Go client                      |
+| Security model       | Basic trust model                        | Extended authentication capabilities         |
 
 ## GoVPN Advantages as OpenVPN Evolution
 
-| Feature | OpenVPN | GoVPN |
-|---------|---------|-------|
-| Development language | C | Go (with OpenVPN compatibility preservation) |
-| Performance | Limited scalability | Improved performance through Go goroutines |
-| Modern authentication | Limited support | Extended OIDC, JWT integration with compatibility preservation |
-| MFA | Requires third-party solutions | Built-in support (OTP) with basic authentication compatibility |
-| LDAP integration | Complex setup | Simplified integration while preserving familiar model |
-| Scaling | Limited | Improved clustering support with single installation compatibility |
-| API | Limited | Full REST API for automation plus classic management methods |
-| Monitoring | Basic | Extended Prometheus metrics while preserving basic logging model |
-| Database | File system | PostgreSQL with option to use classic file storage |
-| DPI/blocking bypass | Requires third-party plugins (obfsproxy) | Built-in modular obfuscation system with adaptive method switching |
+| Feature               | OpenVPN                                  | GoVPN                                                              |
+| --------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| Development language  | C                                        | Go (with OpenVPN compatibility preservation)                       |
+| Performance           | Limited scalability                      | Improved performance through Go goroutines                         |
+| Modern authentication | Limited support                          | Extended OIDC, JWT integration with compatibility preservation     |
+| MFA                   | Requires third-party solutions           | Built-in support (OTP) with basic authentication compatibility     |
+| LDAP integration      | Complex setup                            | Simplified integration while preserving familiar model             |
+| Scaling               | Limited                                  | Improved clustering support with single installation compatibility |
+| API                   | Limited                                  | Full REST API for automation plus classic management methods       |
+| Monitoring            | Basic                                    | Extended Prometheus metrics while preserving basic logging model   |
+| Database              | File system                              | PostgreSQL with option to use classic file storage                 |
+| DPI/blocking bypass   | Requires third-party plugins (obfsproxy) | Built-in modular obfuscation system with adaptive method switching |
 
 ## Technical Architecture
 

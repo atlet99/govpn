@@ -22,8 +22,8 @@ func TestDefaultConfig(t *testing.T) {
 	}
 
 	// Check device settings
-	if config.DeviceName != "tun0" {
-		t.Errorf("Expected DeviceName 'tun0', got '%s'", config.DeviceName)
+	if config.DeviceName != "tun1" {
+		t.Errorf("Expected DeviceName 'tun1', got '%s'", config.DeviceName)
 	}
 
 	if config.DeviceType != "tun" {

@@ -2,7 +2,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create users table with improved constraints and defaults
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE users (
 );
 
 -- Create certificates table with improved constraints
-CREATE TABLE certificates (
+CREATE TABLE IF NOT EXISTS certificates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     type VARCHAR(50) NOT NULL,
     common_name VARCHAR(255) NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE certificates (
 );
 
 -- Create connections table with improved constraints
-CREATE TABLE connections (
+CREATE TABLE IF NOT EXISTS connections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     client_id VARCHAR(255) NOT NULL,
     username VARCHAR(255) NOT NULL,
@@ -60,14 +60,37 @@ CREATE TABLE connections (
         REFERENCES users(username) ON DELETE CASCADE
 );
 
--- Create indexes with improved naming and options
-CREATE INDEX idx_users_username ON users(username) INCLUDE (email, role, status);
-CREATE INDEX idx_users_email ON users(email) INCLUDE (username, status);
-CREATE INDEX idx_certificates_serial ON certificates(serial) INCLUDE (type, common_name);
-CREATE INDEX idx_certificates_type ON certificates(type) INCLUDE (common_name, serial);
-CREATE INDEX idx_connections_client_id ON connections(client_id) INCLUDE (username, ip_address);
-CREATE INDEX idx_connections_username ON connections(username) INCLUDE (client_id, last_activity);
-CREATE INDEX idx_connections_last_activity ON connections(last_activity DESC) INCLUDE (username, client_id);
+-- Create indexes with improved naming and options (with IF NOT EXISTS workaround)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_users_username') THEN
+        CREATE INDEX idx_users_username ON users(username) INCLUDE (email, role, status);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_users_email') THEN
+        CREATE INDEX idx_users_email ON users(email) INCLUDE (username, status);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_certificates_serial') THEN
+        CREATE INDEX idx_certificates_serial ON certificates(serial) INCLUDE (type, common_name);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_certificates_type') THEN
+        CREATE INDEX idx_certificates_type ON certificates(type) INCLUDE (common_name, serial);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_connections_client_id') THEN
+        CREATE INDEX idx_connections_client_id ON connections(client_id) INCLUDE (username, ip_address);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_connections_username') THEN
+        CREATE INDEX idx_connections_username ON connections(username) INCLUDE (client_id, last_activity);
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_connections_last_activity') THEN
+        CREATE INDEX idx_connections_last_activity ON connections(last_activity DESC) INCLUDE (username, client_id);
+    END IF;
+END $$;
 
 -- Create function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -78,16 +101,23 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Create triggers for updating updated_at
-CREATE TRIGGER update_users_updated_at
-    BEFORE UPDATE ON users
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_certificates_updated_at
-    BEFORE UPDATE ON certificates
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- Create triggers for updating updated_at (with IF NOT EXISTS workaround)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_users_updated_at') THEN
+        CREATE TRIGGER update_users_updated_at
+            BEFORE UPDATE ON users
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_certificates_updated_at') THEN
+        CREATE TRIGGER update_certificates_updated_at
+            BEFORE UPDATE ON certificates
+            FOR EACH ROW
+            EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
 -- Add comment to tables
 COMMENT ON TABLE users IS 'Stores user account information';
