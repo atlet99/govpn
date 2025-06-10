@@ -40,6 +40,7 @@ ta.key
 # Configuration files (excluding examples)
 *.conf
 !deploy/*.conf
+!docker/**/*.conf
 
 # Documentation
 /coverage/
@@ -58,3 +59,9 @@ ta.key
 # Node modules
 */node_modules/
 */dist/
+
+# Json files
+!docker/**/*.json
+
+# Cursor rules
+.cursorrules

@@ -1,0 +1,181 @@
+services:
+  # PostgreSQL database for Keycloak
+  postgres:
+    image: postgres:15-alpine
+    container_name: govpn-postgres
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - govpn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Keycloak OIDC provider
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    container_name: govpn-keycloak
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak_password
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HTTP_ENABLED: true
+      KC_HEALTH_ENABLED: true
+      KC_METRICS_ENABLED: true
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin123
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/themes:/opt/keycloak/themes
+      - ./keycloak/imports:/opt/keycloak/data/import
+    networks:
+      - govpn-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: 
+      - start-dev
+      - --import-realm
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # GoVPN server
+  govpn-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: govpn-server
+    environment:
+      # Main settings
+      GOVPN_CONFIG: /etc/govpn/server.conf
+      GOVPN_LOG_LEVEL: info
+      GOVPN_LOG_FILE: /var/log/govpn/server.log
+      
+      # OIDC settings
+      OIDC_ENABLED: "true"
+      OIDC_PROVIDER_URL: http://keycloak:8080/realms/govpn
+      OIDC_CLIENT_ID: govpn-client
+      OIDC_CLIENT_SECRET: govpn-client-secret-12345
+      OIDC_REDIRECT_URL: http://localhost:8081/auth/callback
+      
+      # Network settings
+      VPN_NETWORK: 10.8.0.0/24
+      VPN_PORT: 1194
+      API_PORT: 8081
+      METRICS_PORT: 9090
+    ports:
+      - "1194:1194/udp"  # VPN port
+      - "8081:8081/tcp"  # API port
+      - "9090:9090/tcp"  # Prometheus metrics port
+    volumes:
+      - govpn_data:/var/lib/govpn
+      - govpn_logs:/var/log/govpn
+      - ./certs:/etc/govpn/certs:ro
+      - ./configs:/etc/govpn:ro
+    networks:
+      - govpn-network
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: govpn-prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - govpn-network
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  # Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: govpn-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin123
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - govpn-network
+    restart: unless-stopped
+
+  # Nginx for proxying (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: govpn-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - govpn-network
+    depends_on:
+      - govpn-server
+      - keycloak
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  govpn_data:
+    driver: local
+  govpn_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  govpn-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

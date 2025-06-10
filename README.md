@@ -17,54 +17,54 @@ GoVPN aims to evolve OpenVPN, preserving its time-tested concepts while addressi
 
 ## Current Status
 
-**Phase 1**: ✅ **COMPLETED** - Basic functionality and OpenVPN compatibility  
-**Phase 2**: ✅ **COMPLETED** - Configuration system, obfuscation, authentication, testing  
-**Phase 3**: ✅ **COMPLETED** - Scaling, monitoring, and production readiness  
-**Web Interface**: ✅ **COMPLETED** - Full-featured administrative panel
+**Phase 1**: **COMPLETED** - Basic functionality and OpenVPN compatibility  
+**Phase 2**: **COMPLETED** - Configuration system, obfuscation, authentication, testing  
+**Phase 3**: **COMPLETED** - Scaling, monitoring, and production readiness  
+**Web Interface**: **COMPLETED** - Full-featured administrative panel
 
-### ✨ Latest Achievements
+### Latest Achievements
 
-#### ✅ NEW: Production-Ready Monitoring & Scaling (Phase 3)
-- ✅ **Prometheus Metrics** - comprehensive metrics collection (40+ metric types)
-- ✅ **Structured Logging** - JSON, Text, and OpenVPN-compatible formats with log rotation
-- ✅ **Alert System** - automated notifications with customizable rules and cooldowns
-- ✅ **Performance Monitoring** - system resources, goroutines, memory, and CPU tracking
-- ✅ **Grafana Dashboards** - ready-to-use panels for all VPN server aspects
-- ✅ **Kubernetes Deployment** - complete manifests with auto-scaling and load balancing
-- ✅ **High Performance** - optimized monitoring with minimal overhead (555ns/op for metrics)
-- ✅ **Production Documentation** - comprehensive guides for deployment and troubleshooting
+#### Production-Ready Monitoring and Scaling (Phase 3)
+- **Prometheus Metrics** - comprehensive metrics collection (40+ metric types)
+- **Structured Logging** - JSON, Text, and OpenVPN-compatible formats with log rotation
+- **Alert System** - automated notifications with customizable rules and cooldowns
+- **Performance Monitoring** - system resources, goroutines, memory, and CPU tracking
+- **Grafana Dashboards** - ready-to-use panels for all VPN server aspects
+- **Kubernetes Deployment** - complete manifests with auto-scaling and load balancing
+- **High Performance** - optimized monitoring with minimal overhead (555ns/op for metrics)
+- **Production Documentation** - comprehensive guides for deployment and troubleshooting
 
-#### ✅ COMPLETED: Full-Featured Web Interface
-- ✅ **React + TypeScript** - modern architecture with Material-UI design
-- ✅ **Internationalization** - complete support for Russian and English languages
-- ✅ **User Management** - CRUD operations with roles and statuses
-- ✅ **Real-time Monitoring** - server statistics and connections
-- ✅ **Certificate Management** - creation, viewing, revocation of certificates
-- ✅ **Authentication System** - JWT tokens and secure sessions
-- ✅ **Responsive Design** - optimization for all devices
-- ✅ **API Client** - typed integration with backend
-- ✅ **Development API Server** - mock API for interface development
+#### Full-Featured Web Interface
+- **React + TypeScript** - modern architecture with Material-UI design
+- **Internationalization** - complete support for Russian and English languages
+- **User Management** - CRUD operations with roles and statuses
+- **Real-time Monitoring** - server statistics and connections
+- **Certificate Management** - creation, viewing, revocation of certificates
+- **Authentication System** - JWT tokens and secure sessions
+- **Responsive Design** - optimization for all devices
+- **API Client** - typed integration with backend
+- **Development API Server** - mock API for interface development
 
-#### ✅ COMPLETED: Comprehensive Configuration System
-- ✅ **Enhanced configuration parser** - support for 80+ new parameters with OpenVPN compatibility
-- ✅ **Modular configuration files** - organized auth.conf, mfa.conf, oidc.conf, ldap.conf, obfuscation.conf
-- ✅ **Priority system** - proper OpenVPN-like precedence (config file → command line → defaults)
-- ✅ **8 ready-made configurations** - from basic to enterprise scenarios with detailed examples
+#### Comprehensive Configuration System
+- **Enhanced configuration parser** - support for 80+ new parameters with OpenVPN compatibility
+- **Modular configuration files** - organized auth.conf, mfa.conf, oidc.conf, ldap.conf, obfuscation.conf
+- **Priority system** - proper OpenVPN-like precedence (config file → command line → defaults)
+- **8 ready-made configurations** - from basic to enterprise scenarios with detailed examples
 
-#### ✅ COMPLETED: Full Authentication System
-- ✅ **Basic authentication** - modern hashing algorithms Argon2/PBKDF2
-- ✅ **Multi-factor authentication** - complete TOTP/HOTP support with backup codes
-- ✅ **LDAP integration** - support for Active Directory, OpenLDAP, FreeIPA, 389 Directory, Oracle Internet Directory
-- ✅ **OIDC integration** - works with Keycloak, Google Workspace, Azure AD, Auth0, Okta, GitLab
+#### Full Authentication System
+- **Basic authentication** - modern hashing algorithms Argon2/PBKDF2
+- **Multi-factor authentication** - complete TOTP/HOTP support with backup codes
+- **LDAP integration** - support for Active Directory, OpenLDAP, FreeIPA, 389 Directory, Oracle Internet Directory
+- **OIDC integration** - works with Keycloak, Google Workspace, Azure AD, Auth0, Okta, GitLab
 
-#### ✅ COMPLETED: Comprehensive Obfuscation System
-- ✅ **Modular obfuscation system** with 9 methods (TLS Tunnel, HTTP Mimicry, DNS Tunnel, XOR, Obfsproxy, etc.)
-- ✅ **OpenVPN obfsproxy compatibility** - Direct integration with OpenVPN obfsproxy plugins
-- ✅ **Anti-statistical analysis** - Packet Padding, Timing Obfuscation, Traffic Padding, Flow Watermarking
-- ✅ **Steganography methods** - HTTP Cover Traffic, DNS Tunneling
-- ✅ **Regional profiles** for China, Iran, Russia with adaptive switching
+#### Comprehensive Obfuscation System
+- **Modular obfuscation system** with 9 methods (TLS Tunnel, HTTP Mimicry, DNS Tunnel, XOR, Obfsproxy, etc.)
+- **OpenVPN obfsproxy compatibility** - Direct integration with OpenVPN obfsproxy plugins
+- **Anti-statistical analysis** - Packet Padding, Timing Obfuscation, Traffic Padding, Flow Watermarking
+- **Steganography methods** - HTTP Cover Traffic, DNS Tunneling
+- **Regional profiles** for China, Iran, Russia with adaptive switching
 
-## 📊 Web Interface
+## Web Interface
 
 ### Starting Development Environment
 
@@ -103,7 +103,7 @@ Development API server provides:
 - **Responsiveness**: optimization for desktop and mobile devices
 - **Security**: JWT authentication and protected routes
 
-## 🏗️ Architecture
+## Architecture
 
 ```
                    ┌──────────────────┐
@@ -130,24 +130,24 @@ Development API server provides:
 
 ## Key Features
 
-### ✅ Implemented
-- ✅ **Complete Configuration System** - Enhanced OpenVPN config parser with 80+ new parameters
-- ✅ **Authentication System** - Local, MFA, LDAP, OIDC with standard libraries
-- ✅ **Traffic Obfuscation** - 9 methods with anti-detection and regional profiles
-- ✅ **OpenVPN Compatibility** - Protocol and configuration support
-- ✅ **Modern Cryptography** - TLSv1.3, AES-GCM, ChaCha20-Poly1305
-- ✅ **REST API** - Complete server management interface
-- ✅ **Certificate Management** - Full PKI support
-- ✅ **Web Interface** - Modern React-based administrative panel
-- ✅ **Production Monitoring** - Prometheus metrics, structured logging, Grafana dashboards
-- ✅ **Kubernetes Deployment** - Complete manifests with auto-scaling and load balancing
-- ✅ **Alert System** - Automated notifications with customizable rules and cooldowns
-- ✅ **Performance Optimization** - High-performance monitoring (555ns/op for metrics)
+### Implemented
+- **Complete Configuration System** - Enhanced OpenVPN config parser with 80+ new parameters
+- **Authentication System** - Local, MFA, LDAP, OIDC with standard libraries
+- **Traffic Obfuscation** - 9 methods with anti-detection and regional profiles
+- **OpenVPN Compatibility** - Protocol and configuration support
+- **Modern Cryptography** - TLSv1.3, AES-GCM, ChaCha20-Poly1305
+- **REST API** - Complete server management interface
+- **Certificate Management** - Full PKI support
+- **Web Interface** - Modern React-based administrative panel
+- **Production Monitoring** - Prometheus metrics, structured logging, Grafana dashboards
+- **Kubernetes Deployment** - Complete manifests with auto-scaling and load balancing
+- **Alert System** - Automated notifications with customizable rules and cooldowns
+- **Performance Optimization** - High-performance monitoring (555ns/op for metrics)
 
-### 🚧 In Development
-- 🚧 PostgreSQL integration for enterprise deployments
-- 🚧 Clustering and high availability
-- 🚧 Advanced user provisioning
+### In Development
+- PostgreSQL integration for enterprise deployments
+- Clustering and high availability
+- Advanced user provisioning
 
 ## Requirements
 
@@ -222,7 +222,7 @@ cd web && npm install && npm run dev
 ./govpn-server -config deploy/server.conf -monitoring -metrics-port 9100
 ```
 
-### Production Monitoring & Scaling
+### Production Monitoring and Scaling
 
 #### Kubernetes Deployment
 
@@ -249,495 +249,484 @@ go test -bench=. -benchmem
 ./govpn-server -config deploy/server.conf \
   -monitoring \
   -metrics-port 9100 \
-  -health-port 8080
-
-# Check metrics endpoint
-curl http://localhost:9100/metrics
-
-# Check health endpoint
-curl http://localhost:8080/health
+  -log-format json
 ```
 
-#### Performance Results
+#### Grafana Dashboard Import
 
-| Component | Operations/sec | Time/operation | Memory/operation |
-|-----------|---------------|----------------|------------------|
-| MetricsCollector | ~1,800,000 | 555ns | 0B |
-| Logger (JSON) | ~690,000 | 1445ns | 529B |
-| PerformanceMonitor | ~5,000,000 | 197ns | 0B |
-| AlertManager | ~43,000 | 23μs | 1472B |
+```bash
+# Import ready-made Grafana dashboards
+# 1. Access Grafana UI (default: http://localhost:3000)
+# 2. Go to Dashboard > Import
+# 3. Load from file: docs/monitoring/grafana-dashboard.json
+# 4. Configure data source: Prometheus (http://localhost:9090)
+```
+
+### Certificates and PKI
+
+Generate server and client certificates:
+
+```bash
+# Generate CA and server certificates
+./scripts/generate_certs.sh
+
+# Or use the built-in certificate generator
+go run ./cmd/generate_certs -ca -server -client
+```
 
 ### Configuration Examples
 
-GoVPN provides modular configuration files for different scenarios:
+The project includes 8 ready-made configuration files in `deploy/` directory:
 
-```bash
-# Corporate network with Active Directory and MFA
-cp deploy/server.conf /etc/govpn/
-cp deploy/ldap.conf /etc/govpn/
-cp deploy/mfa.conf /etc/govpn/
-# Edit server.conf and uncomment: include ldap.conf, include mfa.conf
+1. **basic.conf** - Minimal VPN server setup
+2. **server.conf** - Standard server configuration with authentication
+3. **auth.conf** - Authentication configuration (local users, passwords)
+4. **mfa.conf** - Multi-factor authentication setup
+5. **ldap.conf** - LDAP/Active Directory integration
+6. **oidc.conf** - OpenID Connect provider integration
+7. **obfuscation.conf** - Traffic obfuscation and anti-censorship
+8. **monitoring.conf** - Comprehensive monitoring and logging setup
 
-# Public VPN with traffic obfuscation
-cp deploy/obfuscation.conf /etc/govpn/
-# Edit server.conf and uncomment: include obfuscation.conf
+## Configuration
 
-# High security setup
-# Uncomment all authentication methods in server.conf
-```
+### Server Configuration
 
-### Configuration Demo
-
-```bash
-# Run the comprehensive configuration demo
-cd examples
-go run obfuscation_demo.go
-
-# The demo includes:
-# - Configuration parsing examples
-# - Local authentication with secure hashing
-# - MFA setup and validation
-# - User management operations
-# - LDAP configuration examples
-# - OIDC configuration examples
-# - Complete traffic obfuscation demonstrations
-```
-
-## Configuration System
-
-GoVPN features a comprehensive configuration system with OpenVPN compatibility:
-
-### Main Configuration Files
-
-- **`server.conf`** - Main server configuration with OpenVPN compatibility
-- **`client.conf`** - Basic client configuration with all authentication methods
-- **`auth.conf`** - Password authentication with Argon2/PBKDF2 hashing
-- **`mfa.conf`** - Multi-factor authentication with TOTP/HOTP
-- **`oidc.conf`** - OpenID Connect integration (Keycloak, Google, Microsoft, etc.)
-- **`ldap.conf`** - LDAP authentication (Active Directory, OpenLDAP, FreeIPA)
-- **`obfuscation.conf`** - Traffic obfuscation and censorship circumvention
-- **`example-complete.conf`** - Complete demonstration of all features
-
-### Configuration Examples
-
-#### Basic Authentication with MFA
+Basic server configuration file structure:
 
 ```conf
-# server.conf
-include auth.conf
-include mfa.conf
+# Basic VPN server settings
+port 1194
+proto udp
+dev tun
 
-# auth.conf
-auth-hash-method argon2
-auth-argon2-memory 65536
-auth-session-timeout 3600
+# Certificates and encryption
+ca ca.crt
+cert server.crt
+key server.key
+dh dh2048.pem
+cipher AES-256-GCM
 
-# mfa.conf
-mfa-enabled true
-mfa-totp-enabled true
-mfa-backup-codes-count 10
+# Network settings
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist ipp.txt
+
+# Client configuration
+push "redirect-gateway def1 bypass-dhcp"
+push "dhcp-option DNS 8.8.8.8"
+push "dhcp-option DNS 8.8.4.4"
+
+# Security
+keepalive 10 120
+comp-lzo
+persist-key
+persist-tun
+status openvpn-status.log
+verb 3
 ```
 
-#### Enterprise LDAP Integration
+### Authentication Configuration
+
+Configure various authentication methods:
 
 ```conf
-# ldap.conf
+# Local authentication with password file
+auth-user-pass-verify /etc/govpn/auth.txt via-file
+
+# LDAP authentication
 ldap-enabled true
-ldap-server dc.company.com
-ldap-use-tls true
-ldap-bind-dn cn=ldap-reader,ou=service-accounts,dc=company,dc=com
-ldap-user-filter (&(objectClass=user)(sAMAccountName=%s))
-ldap-required-groups CN=VPN-Users,ou=groups,dc=company,dc=com
-```
+ldap-server ldap://your-ldap-server.com:389
+ldap-bind-dn cn=admin,dc=example,dc=com
+ldap-bind-password your-password
+ldap-base-dn ou=users,dc=example,dc=com
 
-#### OIDC with Keycloak
+# Multi-factor authentication
+mfa-enabled true
+mfa-issuer "GoVPN Server"
+mfa-digits 6
+mfa-period 30
 
-```conf
-# oidc.conf
+# OIDC authentication
 oidc-enabled true
-oidc-provider-url https://auth.company.com/realms/company
-oidc-client-id govpn-client
-oidc-scopes openid,profile,email,groups
-oidc-pkce-enabled true
+oidc-issuer https://your-oidc-provider.com
+oidc-client-id your-client-id
+oidc-client-secret your-client-secret
 ```
 
-#### Traffic Obfuscation
+### Obfuscation Configuration
+
+Configure traffic obfuscation to bypass DPI:
 
 ```conf
-# obfuscation.conf
+# Enable obfuscation
 obfuscation-enabled true
-obfuscation-primary-method xor_cipher
-xor-cipher-key "MySecretObfuscationKey2024"
-packet-padding-enabled true
-adaptive-obfuscation-enabled true
 
-# Regional profile for China
-china-profile-enabled false
-china-profile-methods shadowsocks,v2ray
+# XOR obfuscation
+obfuscation-method xor
+obfuscation-key mysecretkey123
+
+# TLS tunnel obfuscation
+obfuscation-method tls-tunnel
+obfuscation-tls-host example.com
+
+# HTTP mimicry
+obfuscation-method http-mimicry
+obfuscation-http-host www.google.com
+
+# Obfsproxy integration
+obfuscation-method obfsproxy
+obfuscation-obfsproxy-transport obfs4
 ```
 
-## REST API
+## API Reference
 
-GoVPN provides a comprehensive REST API for managing authentication, users, and server configuration:
+### Authentication
 
-```bash
-# Enable API with authentication
-./govpn-server -api -api-port 8080 -api-auth -api-auth-secret "your-secret-key"
-```
-
-### Authentication Endpoints
-
-- **POST /auth/login** - User authentication
-- **POST /auth/mfa/setup** - Setup MFA for user
-- **POST /auth/mfa/verify** - Verify MFA code
-- **POST /auth/logout** - User logout
-- **GET /users** - List all users
-- **POST /users** - Create new user
-- **PUT /users/:id** - Update user
-- **DELETE /users/:id** - Delete user
-- **POST /users/:id/roles** - Add user role
-- **DELETE /users/:id/roles/:role** - Remove user role
-
-### Server Management Endpoints
-
-- **GET /status** - Get server status
-- **GET /clients** - List connected clients
-- **GET /certificates** - Certificate management
-- **GET /config** - Server configuration
-- **GET /metrics** - Authentication and obfuscation metrics
-
-### Example Usage
+All API endpoints require JWT authentication. Obtain a token by posting credentials to `/api/v1/auth/login`.
 
 ```bash
-# Authenticate user
-curl -X POST http://127.0.0.1:8080/api/v1/auth/login \
+# Login and get token
+curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "alice", "password": "secure_password_123"}'
+  -d '{"username": "admin", "password": "password"}'
 
-# Setup MFA for user
-curl -X POST http://127.0.0.1:8080/api/v1/auth/mfa/setup \
-  -H "Authorization: Bearer <token>" \
-  -d '{"username": "alice", "email": "alice@company.com"}'
-
-# Get server status
-curl -H "Authorization: Bearer <token>" \
-  http://127.0.0.1:8080/api/v1/status
+# Use token in subsequent requests
+curl -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  http://localhost:8080/api/v1/status
 ```
 
-## Security Features
+### Endpoints
 
-### 🛡️ Authentication Security
-- **Modern Password Hashing**: Argon2 (recommended) and PBKDF2 support
-- **Multi-Factor Authentication**: Industry-standard TOTP/HOTP implementation
-- **Enterprise Integration**: Secure LDAP and OIDC with standard libraries
-- **Brute Force Protection**: Rate limiting and account lockout
-- **Session Security**: Secure token handling with automatic refresh
+#### Server Status
+```bash
+GET /api/v1/status
+```
 
-### 🔒 Communication Security
-- **Standard Libraries**: Uses `golang.org/x/oauth2`, `github.com/pquerna/otp`, `github.com/coreos/go-oidc`
-- **PKCE Support**: Enhanced OAuth2 security for public clients
-- **Certificate Validation**: Proper SSL/TLS verification
-- **Audit Logging**: Comprehensive security event tracking
+Returns server status, uptime, and basic statistics.
 
-### 🎭 Traffic Obfuscation Security
-- **Multiple Methods**: TLS, HTTP, DNS tunneling with automatic switching
-- **Anti-Detection**: Statistical analysis resistance and regional profiles
-- **Steganography**: Data hiding within legitimate traffic patterns
-- **Adaptive Switching**: Automatic method changes on censorship detection
+#### User Management
+```bash
+# List all users
+GET /api/v1/users
 
-## Traffic Obfuscation
+# Create new user
+POST /api/v1/users
+{
+  "username": "john",
+  "email": "john@example.com",
+  "password": "securepassword",
+  "role": "user"
+}
 
-GoVPN includes a comprehensive traffic obfuscation system designed to bypass Deep Packet Inspection (DPI) and censorship:
+# Get user details
+GET /api/v1/users/{id}
 
-### Available Methods
+# Update user
+PATCH /api/v1/users/{id}
+{
+  "email": "newemail@example.com",
+  "role": "admin"
+}
 
-1. **XOR Cipher** - Fast packet-level obfuscation
-2. **TLS Tunneling** - HTTPS traffic masquerading
-3. **HTTP Mimicry** - Web request simulation
-4. **HTTP Steganography** - Data hiding in HTTP traffic
-5. **DNS Tunneling** - Emergency communication channel
-6. **Packet Padding** - Size randomization
-7. **Timing Obfuscation** - Temporal pattern masking
-8. **Traffic Padding** - Volume pattern masking
-9. **Obfsproxy** - OpenVPN obfsproxy plugin compatibility (obfs3, obfs4, scramblesuit)
+# Delete user
+DELETE /api/v1/users/{id}
+```
 
-### Regional Profiles
+#### Active Connections
+```bash
+GET /api/v1/clients
+```
 
-- **China Profile** - Great Firewall bypass strategies
-- **Iran Profile** - Optimized for Iranian censorship
-- **Russia Profile** - Adapted for Russian restrictions
+Returns list of currently connected VPN clients.
 
-### Usage Examples
+#### Certificate Management
+```bash
+# List certificates
+GET /api/v1/certificates
+
+# Generate new certificate
+POST /api/v1/certificates
+{
+  "common_name": "client1",
+  "email": "client1@example.com",
+  "validity_days": 365
+}
+
+# Revoke certificate
+DELETE /api/v1/certificates/{serial}
+```
+
+#### Configuration
+```bash
+# Get current configuration
+GET /api/v1/config
+
+# Update configuration
+PUT /api/v1/config
+{
+  "port": 1194,
+  "protocol": "udp",
+  "cipher": "AES-256-GCM"
+}
+```
+
+#### Logs
+```bash
+# Get recent logs
+GET /api/v1/logs?limit=100&level=info
+```
+
+## Monitoring and Metrics
+
+### Prometheus Metrics
+
+GoVPN exposes comprehensive metrics for monitoring:
+
+- **Connection metrics**: active connections, new connections per second, disconnections
+- **Performance metrics**: CPU usage, memory consumption, goroutine count
+- **Network metrics**: bytes transferred, packets processed, error rates
+- **Authentication metrics**: login attempts, successful/failed authentications
+- **Obfuscation metrics**: obfuscated packets, method distribution
+
+Example metrics endpoint:
+```bash
+curl http://localhost:9100/metrics
+```
+
+### Grafana Integration
+
+Import the provided Grafana dashboard for comprehensive monitoring:
+
+1. Copy `docs/monitoring/grafana-dashboard.json`
+2. Import in Grafana UI
+3. Configure Prometheus data source
+4. Monitor server performance, connections, and security events
+
+### Log Formats
+
+GoVPN supports multiple log formats:
 
 ```bash
-# Enable basic obfuscation
-./govpn-server -config deploy/server.conf -obfuscation
+# JSON format (structured logging)
+./govpn-server -log-format json
 
-# Use China profile
-./govpn-server -config deploy/server.conf -obfuscation -regional-profile=china
+# Text format (human-readable)
+./govpn-server -log-format text
 
-# Custom XOR key
-./govpn-server -config deploy/server.conf -obfuscation -xor-key="my-secret-key"
-
-# Enable obfsproxy with obfs4 transport
-./govpn-server -config deploy/server.conf -obfuscation -obfsproxy-transport=obfs4
-
-# Obfsproxy server mode
-./govpn-server -config deploy/server.conf -obfuscation -obfsproxy-mode=server
+# OpenVPN compatible format
+./govpn-server -log-format openvpn
 ```
 
-## Development
+## Testing
 
-### Project Structure
+### Unit Tests
 
-```
-govpn/
-├── cmd/                    # Executable applications
-│   ├── server/             # VPN server with comprehensive auth
-│   ├── client/             # Client application
-│   └── dev-api/            # Development API server with mock data
-├── pkg/                    # Library code
-│   ├── auth/               # 🔐 Complete authentication system
-│   ├── compat/             # 🔧 OpenVPN configuration compatibility
-│   ├── obfuscation/        # 🎭 Traffic obfuscation system
-│   ├── core/               # VPN core with protocol compatibility
-│   ├── api/                # REST API with auth endpoints
-│   └── monitoring/         # Metrics and monitoring
-├── web/                    # 🌐 React web interface
-│   ├── src/pages/          # Application pages (Dashboard, Users, etc.)
-│   ├── src/components/     # Reusable React components
-│   ├── src/services/       # API client with TypeScript
-│   └── src/locales/        # Internationalization (en/ru)
-├── scripts/                # 🚀 Development and deployment scripts
-├── examples/               # 🧪 Demo applications
-├── docs/                   # 📚 Comprehensive documentation
-├── deploy/                 # 🚀 Production-ready configurations
-│   ├── server.conf         # Main server configuration
-│   ├── auth.conf           # Authentication configuration
-│   ├── mfa.conf            # Multi-factor authentication
-│   ├── oidc.conf           # OpenID Connect settings
-│   ├── ldap.conf           # LDAP/Active Directory
-│   ├── obfuscation.conf    # Traffic obfuscation
-│   ├── client.conf         # Client configuration
-│   └── example-complete.conf # Complete feature demo
-└── deploy/                 # Deployment configurations
-```
-
-### Building and Testing
+Run the complete test suite:
 
 ```bash
-# Install dependencies
-go mod tidy
-
 # Run all tests
-make test
+go test ./...
 
-# Run linting
-make lint
+# Run tests with coverage
+go test -cover ./...
 
-# Complete check (tests + linting + static analysis)
-make check-all
-
-# Run configuration and authentication demo
-cd examples && go run obfuscation_demo.go
-
-# Start development web interface
-./scripts/dev-start.sh
+# Run benchmarks
+go test -bench=. ./pkg/monitoring/
 ```
 
-### Testing Authentication
+### Integration Tests
+
+Test with real VPN scenarios:
 
 ```bash
-# Run authentication tests
-go test ./pkg/auth/...
+# Test authentication system
+go test ./pkg/auth/... -v
 
-# Run configuration parser tests
-go test ./pkg/compat/...
+# Test obfuscation methods
+go test ./pkg/obfuscation/... -v
 
-# Run obfuscation tests
-go test ./pkg/obfuscation/...
-
-# Run with verbose output
-go test -v ./pkg/auth/... ./pkg/compat/... ./pkg/obfuscation/...
+# Test monitoring and metrics
+go test ./pkg/monitoring/... -bench=.
 ```
 
-## Documentation
+### Performance Tests
 
-Comprehensive documentation is available in the [docs/](docs/) directory and [deploy/](deploy/) folder:
+Benchmark critical components:
 
-- **[Configuration Guide](deploy/README.md)** - Complete setup guide with examples:
-  - Modular configuration system
-  - Authentication methods (local, MFA, LDAP, OIDC)
-  - Traffic obfuscation setup
-  - Regional profiles and enterprise scenarios
-  - Security best practices
+```bash
+# Monitor performance benchmarks
+cd pkg/monitoring
+go test -bench=BenchmarkPerformanceMonitor -benchmem
 
-- **[Web Interface Guide](web/README.md)** - Frontend development guide:
-  - React + TypeScript architecture
-  - API integration patterns
-  - Internationalization setup
-  - Development environment
+# Obfuscation performance
+cd pkg/obfuscation  
+go test -bench=BenchmarkObfuscation -benchmem
+```
 
-- **[Authentication System](docs/auth.md)** - Enterprise authentication:
-  - Local authentication with secure hashing
-  - MFA setup and management
-  - LDAP integration for enterprises
-  - OIDC/OAuth2 with standard libraries
-  - Role-based access control
+## Production Deployment
 
-- **[Obfuscation System](docs/obfuscation/)** - Traffic hiding techniques
-  - **[Obfsproxy Integration](examples/OBFSPROXY_USAGE.md)** - OpenVPN obfsproxy compatibility guide
-- **[API Reference](docs/api.md)** - REST API documentation
-- **[Deployment Guide](docs/deployment.md)** - Production setup
+### Docker Deployment
 
-### Key Documentation Highlights
+```bash
+# Build Docker image
+docker build -t govpn:latest .
 
-✅ **Production-Ready Configurations** - 8 detailed .conf files for enterprise use  
-✅ **Real Working Examples** - All code examples are tested and functional  
-✅ **Standard Libraries** - Uses `golang.org/x/oauth2`, `github.com/pquerna/otp`  
-✅ **Security Best Practices** - Industry-standard implementations  
-✅ **Troubleshooting Guides** - Common issues and solutions  
-✅ **Migration Paths** - Upgrading from OpenVPN installations  
+# Run container
+docker run -d \
+  --name govpn-server \
+  -p 1194:1194/udp \
+  -p 8080:8080 \
+  -v /path/to/config:/etc/govpn \
+  -v /path/to/certs:/etc/govpn/certs \
+  govpn:latest
+```
+
+### Systemd Service
+
+Create systemd service file `/etc/systemd/system/govpn.service`:
+
+```ini
+[Unit]
+Description=GoVPN Server
+After=network.target
+
+[Service]
+Type=simple
+User=govpn
+WorkingDirectory=/opt/govpn
+ExecStart=/opt/govpn/govpn-server -config /etc/govpn/server.conf
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl enable govpn
+sudo systemctl start govpn
+sudo systemctl status govpn
+```
+
+### Security Considerations
+
+1. **Certificate Management**: Use strong RSA keys (minimum 2048-bit) or ECC curves
+2. **Network Security**: Configure firewall rules, disable unnecessary services
+3. **Authentication**: Enable MFA for administrative access
+4. **Monitoring**: Set up alerts for failed authentication attempts and unusual traffic patterns
+5. **Updates**: Keep the server and dependencies updated regularly
+
+### Performance Tuning
+
+1. **OS Tuning**: Increase file descriptor limits, optimize network buffers
+2. **Go Runtime**: Set appropriate GOMAXPROCS, garbage collection targets
+3. **Network**: Configure optimal MTU sizes, enable hardware offloading
+4. **Monitoring**: Use lightweight monitoring configurations to minimize overhead
+
+## Troubleshooting
+
+### Common Issues
+
+#### Connection Problems
+```bash
+# Check server status
+./govpn-server -status
+
+# Verify certificates
+openssl x509 -in server.crt -text -noout
+
+# Test network connectivity
+nc -u server-ip 1194
+```
+
+#### Authentication Issues
+```bash
+# Check authentication logs
+tail -f /var/log/govpn/auth.log
+
+# Verify LDAP connectivity
+ldapsearch -x -H ldap://your-ldap-server -D "cn=admin,dc=example,dc=com" -W
+
+# Test OIDC configuration
+curl https://your-oidc-provider/.well-known/openid_configuration
+```
+
+#### Performance Issues
+```bash
+# Monitor server performance
+curl http://localhost:9100/metrics | grep govpn
+
+# Check system resources
+top -p $(pgrep govpn-server)
+
+# Analyze connection patterns
+./govpn-server -api -debug
+curl http://localhost:8080/api/v1/clients
+```
+
+### Log Analysis
+
+Enable detailed logging for troubleshooting:
+
+```bash
+# Enable debug logging
+./govpn-server -config server.conf -log-level debug
+
+# Monitor authentication events
+tail -f /var/log/govpn/auth.log | grep "authentication"
+
+# Track connection events
+tail -f /var/log/govpn/server.log | grep "client"
+```
 
 ## Contributing
 
-We welcome contributors! Please:
+### Development Setup
 
-1. Read the documentation in [docs/](docs/) and [deploy/README.md](deploy/README.md)
-2. Run the demo to understand the system: `cd examples && go run obfuscation_demo.go`
-3. Try the web interface: `./scripts/dev-start.sh`
-4. Follow security best practices documented in configuration files
-5. Ensure tests pass: `make check-all`
-6. Update documentation for new features
+1. **Fork the repository**
+2. **Clone your fork**:
+   ```bash
+   git clone https://github.com/your-username/govpn.git
+   cd govpn
+   ```
+3. **Install dependencies**:
+   ```bash
+   go mod download
+   cd web && npm install
+   ```
+4. **Run tests**:
+   ```bash
+   go test ./...
+   cd web && npm test
+   ```
 
-### Areas for Contribution
+### Code Standards
 
-- 🔐 Authentication providers (SAML, custom OAuth2)
-- 🎭 New obfuscation methods  
-- 🌐 Web interface enhancements
-- 📊 Monitoring and metrics
-- 🐳 Container and Kubernetes support
-- 📚 Documentation improvements
-- 🔧 Configuration system enhancements
+- **Go Code**: Follow Go conventions, use `gofmt`, `golint`, and `go vet`
+- **Web Code**: Use ESLint and Prettier configurations
+- **Comments**: Write clear, descriptive comments explaining the purpose
+- **Tests**: Include unit tests for new functionality
+- **Documentation**: Update relevant documentation for changes
+
+### Pull Request Process
+
+1. **Create feature branch**: `git checkout -b feature/your-feature-name`
+2. **Make changes** with appropriate tests and documentation
+3. **Run full test suite**: `make test`
+4. **Submit pull request** with clear description of changes
+5. **Address review feedback** if required
 
 ## License
 
-GoVPN is distributed under the [MIT](./LICENSE) license. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Documentation**: See `docs/` directory for detailed guides
+- **Issues**: Report bugs and feature requests via GitHub Issues
+- **Discussions**: Use GitHub Discussions for questions and community support
 
 ---
 
-**🚀 Ready to get started?** 
-
-- **Quick setup**: Copy configuration files from [deploy/](deploy/) folder
-- **Web interface**: Run `./scripts/dev-start.sh` to start development environment
-- **Enterprise setup**: Read [deploy/README.md](deploy/README.md) for LDAP/OIDC integration
-- **Anti-censorship**: Configure traffic obfuscation with [deploy/obfuscation.conf](deploy/obfuscation.conf)
-- **Full demo**: Run `cd examples && go run obfuscation_demo.go` to see everything in action! 
-
-## Storage
-
-The storage package provides a flexible and extensible data persistence layer for GoVPN. It implements a clean interface that can be backed by different storage engines.
-
-### Features
-
-- Clean interface design with clear separation of concerns
-- PostgreSQL implementation with connection pooling
-- Support for transactions
-- Database migrations
-- Optimized queries with proper indexing
-- Comprehensive test coverage
-
-### Data Models
-
-#### User
-- ID
-- Username
-- Email
-- Password (hashed)
-- Role
-- Status
-- Last login time
-- Created/Updated timestamps
-
-#### Certificate
-- ID
-- Type (CA, server, client)
-- Common Name
-- Serial number
-- Validity period
-- Revocation status
-- Revocation reason
-- Created/Updated timestamps
-
-#### Connection
-- ID
-- Client ID
-- Username
-- IP Address
-- Virtual IP
-- Traffic statistics
-- Connection time
-- Last activity
-- Obfuscation method
-- Protocol
-- Client version
-
-### Operations
-
-The storage interface supports the following operations:
-
-#### User Management
-- Create user
-- Get user by ID and username
-- Update user
-- Delete user
-- List users with pagination
-- Count total users
-
-#### Certificate Management
-- Create certificate
-- Get certificate by ID and serial number
-- Update certificate
-- Revoke certificate with reason
-- List certificates by type with pagination
-- Count certificates by type
-
-#### Connection Management
-- Create connection record
-- Get connection info
-- Update connection
-- Delete connection
-- List active connections with pagination
-- Count active connections
-- Update connection statistics
-
-### Usage
-
-```go
-// Create a new PostgreSQL storage instance
-config := storage.Config{
-    Host:     "localhost",
-    Port:     5432,
-    User:     "govpn",
-    Password: "secret",
-    Database: "govpn",
-    SSLMode:  "disable",
-    MaxConns: 10,
-    MinConns: 2,
-}
-
-store, err := postgres.New(config)
-if err != nil {
-    log.Fatal(err)
-}
-
-// Use the storage interface
-ctx := context.Background()
-user := &storage.User{
-    Username: "john",
-    Email:    "john@example.com",
-    Role:     "user",
-}
-
-err = store.CreateUser(ctx, user)
-``` 
+**GoVPN** - Modern OpenVPN implementation in Go with enhanced security, performance, and management capabilities. 

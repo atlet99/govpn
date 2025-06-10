@@ -1,0 +1,56 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # GoVPN Server metrics
+  - job_name: 'govpn-server'
+    static_configs:
+      - targets: ['govpn-server:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scheme: http
+
+  # Keycloak metrics
+  - job_name: 'keycloak'
+    static_configs:
+      - targets: ['keycloak:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # PostgreSQL metrics (if exporter is enabled)
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scheme: http
+
+  # Node exporter (if added)
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Remote write configuration (if needed)
+# remote_write:
+#   - url: "http://remote-storage:9090/api/v1/write"
+
+# Remote read configuration (if needed)  
+# remote_read:
+#   - url: "http://remote-storage:9090/api/v1/read" 

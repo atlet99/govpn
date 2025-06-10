@@ -2,7 +2,7 @@
 
 Modern administrative panel for managing GoVPN server, built with React + TypeScript + Material-UI.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Launch development environment
 
@@ -26,7 +26,7 @@ npm run dev
 
 Open http://localhost:5173 in browser.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 web/
@@ -63,7 +63,7 @@ web/
 └── README.md               # This documentation
 ```
 
-## 🎯 Main Features
+## Main Features
 
 ### 1. User Management (`/users`)
 
@@ -126,7 +126,7 @@ web/
 - **Security**
 - **Backup**
 
-## 🌐 Internationalization
+## Internationalization
 
 Full multi-language support:
 
@@ -159,7 +159,7 @@ Full multi-language support:
 }
 ```
 
-## 🎨 UI/UX Design
+## UI/UX Design
 
 ### Material-UI components
 
@@ -183,7 +183,7 @@ Full multi-language support:
 - **Tablet** - adapted interface
 - **Mobile** - optimized display
 
-## 🔗 API Integration
+## API Integration
 
 ### Typed API client
 

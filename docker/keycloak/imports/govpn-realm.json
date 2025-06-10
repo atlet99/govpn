@@ -1,0 +1,257 @@
+{
+  "id": "govpn",
+  "realm": "govpn",
+  "displayName": "GoVPN Test Realm",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 30,
+  "defaultRoles": [
+    "offline_access",
+    "uma_authorization"
+  ],
+  "requiredCredentials": [
+    "password"
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "browserSecurityHeaders": {
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "smtpServer": {},
+  "loginTheme": "keycloak",
+  "accountTheme": "keycloak",
+  "adminTheme": "keycloak",
+  "emailTheme": "keycloak",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "ca",
+    "de",
+    "en",
+    "es",
+    "fr",
+    "it",
+    "ja",
+    "lt",
+    "nl",
+    "no",
+    "pt-BR",
+    "ru",
+    "sk",
+    "sv",
+    "tr",
+    "zh-CN"
+  ],
+  "defaultLocale": "en",
+  "groups": [
+    {
+      "id": "vpn-users",
+      "name": "vpn-users",
+      "path": "/vpn-users",
+      "attributes": {
+        "description": ["Users allowed to connect to VPN"]
+      },
+      "subGroups": []
+    },
+    {
+      "id": "vpn-admins",
+      "name": "vpn-admins",
+      "path": "/vpn-admins", 
+      "attributes": {
+        "description": ["VPN administrators with management access"]
+      },
+      "subGroups": []
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "id": "vpn-user",
+        "name": "vpn-user",
+        "description": "Standard VPN user role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "govpn"
+      },
+      {
+        "id": "vpn-admin", 
+        "name": "vpn-admin",
+        "description": "VPN administrator role",
+        "composite": false,
+        "clientRole": false,
+        "containerId": "govpn"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "id": "govpn-client-id",
+      "clientId": "govpn-client",
+      "name": "GoVPN Client",
+      "description": "OpenID Connect client for GoVPN",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "govpn-client-secret-12345",
+      "redirectUris": [
+        "http://localhost:8081/*",
+        "http://localhost:8081/auth/callback",
+        "http://127.0.0.1:8081/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8081",
+        "http://127.0.0.1:8081"
+      ],
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "frontchannelLogout": true,
+      "attributes": {
+        "saml.assertion.signature": "false",
+        "saml.force.post.binding": "false",
+        "saml.multivalued.roles": "false",
+        "saml.encrypt": "false",
+        "oauth2.device.authorization.grant.enabled": "false",
+        "backchannel.logout.revoke.offline.tokens": "false",
+        "saml.server.signature": "false",
+        "saml.server.signature.keyinfo.ext": "false",
+        "exclude.session.state.from.auth.response": "false",
+        "oidc.ciba.grant.enabled": "false",
+        "saml.artifact.binding": "false",
+        "backchannel.logout.session.required": "true",
+        "client_credentials.use_refresh_token": "false",
+        "saml_force_name_id_format": "false",
+        "require.pushed.authorization.requests": "false",
+        "saml.client.signature": "false",
+        "tls.client.certificate.bound.access.tokens": "false",
+        "saml.authnstatement": "false",
+        "display.on.consent.screen": "false",
+        "saml.onetimeuse.condition": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "role_list",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "test-user-id",
+      "username": "testuser",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "testuser@example.com",
+      "credentials": [
+        {
+          "id": "password-credential",
+          "type": "password",
+          "userLabel": "password",
+          "createdDate": 1640995200000,
+          "secretData": "{\"value\":\"password123\",\"salt\":\"salt\"}",
+          "credentialData": "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\"}"
+        }
+      ],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "vpn-user",
+        "offline_access",
+        "uma_authorization"
+      ],
+      "groups": [
+        "/vpn-users"
+      ],
+      "attributes": {
+        "department": ["IT"],
+        "location": ["Remote"]
+      }
+    },
+    {
+      "id": "admin-user-id", 
+      "username": "admin",
+      "enabled": true,
+      "totp": false,
+      "emailVerified": true,
+      "firstName": "VPN",
+      "lastName": "Admin",
+      "email": "admin@example.com",
+      "credentials": [
+        {
+          "id": "admin-password-credential",
+          "type": "password", 
+          "userLabel": "password",
+          "createdDate": 1640995200000,
+          "secretData": "{\"value\":\"admin123\",\"salt\":\"salt\"}",
+          "credentialData": "{\"hashIterations\":27500,\"algorithm\":\"pbkdf2-sha256\"}"
+        }
+      ],
+      "disableableCredentialTypes": [],
+      "requiredActions": [],
+      "realmRoles": [
+        "vpn-user",
+        "vpn-admin", 
+        "offline_access",
+        "uma_authorization"
+      ],
+      "groups": [
+        "/vpn-users",
+        "/vpn-admins"
+      ],
+      "attributes": {
+        "department": ["IT"],
+        "location": ["Office"]
+      }
+    }
+  ],
+  "scopeMappings": [
+    {
+      "client": "govpn-client",
+      "roles": ["vpn-user", "vpn-admin"]
+    }
+  ],
+  "clientScopeMappings": {
+    "govpn-client": [
+      {
+        "client": "govpn-client",
+        "roles": ["vpn-user", "vpn-admin"]
+      }
+    ]
+  }
+} 
