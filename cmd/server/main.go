@@ -226,7 +226,7 @@ func getDefaultDeviceName() string {
 	case "darwin":
 		return "utun8"
 	default:
-		return "tun0"
+		return "tun1"
 	}
 }
 
@@ -434,13 +434,19 @@ func applyConfigOverrides(config *core.Config) {
 
 // convertConfig converts OpenVPN configuration to GoVPN configuration
 func convertConfig(openvpnConfig map[string]interface{}) core.Config {
+	// Convert server network from OpenVPN format to CIDR format
+	serverNetworkStr := getStringValue(openvpnConfig, "server_network", "10.8.0.0 255.255.255.0")
+	serverNetwork := convertServerNetworkToCIDR(serverNetworkStr)
+
 	config := core.Config{
 		DeviceType:        getStringValue(openvpnConfig, "dev", "tun"),
 		DeviceName:        getDefaultDeviceName(),
 		ListenAddress:     getStringValue(openvpnConfig, "local", "0.0.0.0"),
 		Protocol:          getStringValue(openvpnConfig, "protocol", "udp"),
 		Port:              getIntValue(openvpnConfig, "port", 1194),
-		ServerNetwork:     getStringValue(openvpnConfig, "server_network", "10.8.0.0 255.255.255.0"),
+		EnableTCP:         getBoolValue(openvpnConfig, "tcp_enabled", true),
+		EnableUDP:         getBoolValue(openvpnConfig, "udp_enabled", true),
+		ServerNetwork:     serverNetwork,
 		DNSServers:        getStringSlice(openvpnConfig, "dns"),
 		CipherMode:        getStringValue(openvpnConfig, "cipher", "AES-256-GCM"),
 		AuthDigest:        getStringValue(openvpnConfig, "auth", "SHA256"),
@@ -451,6 +457,13 @@ func convertConfig(openvpnConfig map[string]interface{}) core.Config {
 		KeepaliveTimeout:  getIntValue(openvpnConfig, "keepalive_timeout", 120),
 		LogLevel:          getStringValue(openvpnConfig, "log_level", "info"),
 		RunAsDaemon:       getBoolValue(openvpnConfig, "daemon", false),
+
+		// API settings
+		EnableAPI:        getBoolValue(openvpnConfig, "api-enabled", false),
+		APIListenAddress: getStringValue(openvpnConfig, "api-address", "127.0.0.1"),
+		APIPort:          getIntValue(openvpnConfig, "api-port", 8080),
+		APIAuth:          getBoolValue(openvpnConfig, "api_auth", true),
+		APIAuthSecret:    getStringValue(openvpnConfig, "api_auth_secret", ""),
 
 		// === AUTHENTICATION PARAMETERS ===
 		// Basic authentication
@@ -814,4 +827,27 @@ func convertToCIDR(ip, mask string) string {
 	}
 
 	return fmt.Sprintf("%s/%d", ip, prefixLen)
+}
+
+// convertServerNetworkToCIDR converts server network string from OpenVPN format to CIDR format
+func convertServerNetworkToCIDR(serverNetwork string) string {
+	// If already in CIDR format (contains /), return as is
+	if strings.Contains(serverNetwork, "/") {
+		return serverNetwork
+	}
+
+	// Split by space to get IP and mask
+	parts := strings.Fields(serverNetwork)
+	if len(parts) >= 2 {
+		return convertToCIDR(parts[0], parts[1])
+	}
+
+	// If only IP provided, assume /24
+	if len(parts) == 1 {
+		return fmt.Sprintf("%s/24", parts[0])
+	}
+
+	// Default fallback
+	log.Printf("Warning: invalid server network format '%s', using default", serverNetwork)
+	return "10.8.0.0/24"
 }

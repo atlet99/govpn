@@ -1,0 +1,90 @@
+services:
+  # Real GoVPN Server
+  govpn-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: govpn-real-server
+    environment:
+      # Main settings
+      GOVPN_LOG_LEVEL: debug
+      GOVPN_LOG_FILE: /var/log/govpn/server.log
+      
+      # Disable OIDC for testing
+      OIDC_ENABLED: "false"
+      
+      # Network settings
+      VPN_NETWORK: 10.8.0.0/24
+      VPN_PORT: 1194
+      API_PORT: 8081
+      METRICS_PORT: 9090
+    ports:
+      - "1194:1194/udp"  # VPN port
+      - "8081:8081/tcp"  # API port
+      - "9090:9090/tcp"  # Metrics port
+    volumes:
+      - govpn_real_data:/var/lib/govpn
+      - govpn_real_logs:/var/log/govpn
+      - govpn_real_certs:/etc/govpn/certs
+    networks:
+      - govpn-full-network
+    restart: unless-stopped
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    healthcheck:
+      test: ["CMD", "netstat", "-ln", "|", "grep", ":1194"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Mock API as fallback (on different port)
+  govpn-mock-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mock
+    container_name: govpn-mock-api
+    ports:
+      - "8080:8080"
+    networks:
+      - govpn-full-network
+    restart: unless-stopped
+
+  # Web Dashboard
+  govpn-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web-full
+    container_name: govpn-full-web
+    environment:
+      REACT_APP_API_URL: http://localhost:8081
+      REACT_APP_MOCK_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      govpn-mock-api:
+        condition: service_started
+    networks:
+      - govpn-full-network
+    restart: unless-stopped
+
+volumes:
+  govpn_real_data:
+    driver: local
+  govpn_real_logs:
+    driver: local
+  govpn_real_certs:
+    driver: local
+
+networks:
+  govpn-full-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16 

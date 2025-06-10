@@ -990,3 +990,15 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
+
+// handleHealth returns server health status
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Simple health check - if we can respond, we're healthy
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("OK"))
+}

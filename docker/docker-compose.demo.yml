@@ -1,0 +1,32 @@
+services:
+  # Mock GoVPN API server for demo
+  govpn-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mock
+    container_name: govpn-demo-api
+    ports:
+      - "8080:8080"
+    networks:
+      - govpn-demo-network
+    restart: unless-stopped
+
+  # Web Dashboard for GoVPN
+  govpn-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: govpn-demo-web
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - govpn-api
+    networks:
+      - govpn-demo-network
+    restart: unless-stopped
+
+networks:
+  govpn-demo-network:
+    driver: bridge 

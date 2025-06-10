@@ -1,0 +1,79 @@
+services:
+  # GoVPN server for testing
+  govpn-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: govpn-test-server
+    environment:
+      # Main settings
+      GOVPN_CONFIG: /etc/govpn/configs/server-simple.conf
+      GOVPN_LOG_LEVEL: debug
+      GOVPN_LOG_FILE: /var/log/govpn/server.log
+      
+      # Disable OIDC for simple testing
+      OIDC_ENABLED: "false"
+      
+      # Network settings
+      VPN_NETWORK: 10.8.0.0/24
+      VPN_PORT: 1194
+      API_PORT: 8080
+      METRICS_PORT: 9090
+    ports:
+      - "1194:1194/udp"  # VPN port
+      - "8080:8080/tcp"  # API/Web Dashboard port
+      - "9090:9090/tcp"  # Prometheus metrics port
+    volumes:
+      - govpn_test_data:/var/lib/govpn
+      - govpn_test_logs:/var/log/govpn
+      - govpn_test_certs:/etc/govpn/certs
+      - ./configs:/etc/govpn/configs:ro
+      - ./scripts:/usr/local/bin:ro
+    networks:
+      - govpn-test-network
+    restart: unless-stopped
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    devices:
+      - /dev/net/tun
+    sysctls:
+      - net.ipv4.ip_forward=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["/usr/local/bin/govpn-server", "--api", "--api-listen", "0.0.0.0", "--api-port", "8080", "--server", "10.8.0.0", "--mask", "255.255.255.0", "--port", "1194", "--log-level", "debug"]
+
+  # Web interface for testing
+  govpn-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: govpn-web-test
+    environment:
+      REACT_APP_API_URL: http://localhost:8080
+    ports:
+      - "3000:3000"
+    depends_on:
+      - govpn-server
+    networks:
+      - govpn-test-network
+    restart: unless-stopped
+
+volumes:
+  govpn_test_data:
+    driver: local
+  govpn_test_logs:
+    driver: local
+  govpn_test_certs:
+    driver: local
+
+networks:
+  govpn-test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16 

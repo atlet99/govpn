@@ -1,0 +1,11 @@
+# GoVPN Docker Compose Configuration
+# 
+# This is the main docker-compose file that includes the full GoVPN infrastructure.
+# For other configurations, see docker/ directory:
+#   - docker/docker-compose.yml        - Full infrastructure with Keycloak, monitoring
+#   - docker/docker-compose.full.yml   - Real GoVPN server with API and Web UI
+#   - docker/docker-compose.demo.yml   - Demo with mock API
+#   - docker/docker-compose.test.yml   - Testing configuration
+
+include:
+  - docker/docker-compose.full.yml 

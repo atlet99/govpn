@@ -34,6 +34,24 @@ const (
 	IFF_NO_PI = 0x1000 // No packet information
 )
 
+// cleanupExistingDevice removes an existing network interface if it exists
+func cleanupExistingDevice(deviceName string) error {
+	// Check if device exists
+	cmd := exec.Command("ip", "link", "show", deviceName)
+	if err := cmd.Run(); err != nil {
+		// Device doesn't exist, nothing to clean up
+		return nil
+	}
+
+	// Device exists, remove it
+	cmd = exec.Command("ip", "link", "delete", deviceName)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to delete existing device %s: %w", deviceName, err)
+	}
+
+	return nil
+}
+
 // Creates a TUN/TAP device on Linux
 func linuxCreateTunTapDevice(config TunTapConfig) (*TunTapDevice, error) {
 	var flag int
@@ -50,6 +68,13 @@ func linuxCreateTunTapDevice(config TunTapConfig) (*TunTapDevice, error) {
 
 	// Add flag for no packet information
 	flag |= IFF_NO_PI
+
+	// Check if device with this name already exists and remove it
+	if config.Name != "" {
+		if err := cleanupExistingDevice(config.Name); err != nil {
+			return nil, fmt.Errorf("failed to cleanup existing device: %w", err)
+		}
+	}
 
 	// Open the TUN/TAP device file
 	file, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)

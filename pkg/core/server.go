@@ -78,30 +78,45 @@ func NewServer(config Config) (*OpenVPNServer, error) {
 
 // Start launches the VPN server
 func (s *OpenVPNServer) Start(ctx context.Context) error {
+	log.Printf("Starting OpenVPN server...")
 	if s.running.Load() {
 		return fmt.Errorf("server is already running")
 	}
 
 	s.ctx, s.cancelFunc = context.WithCancel(ctx)
+	log.Printf("Context created")
+
+	// Ensure MTU has a valid value
+	mtu := s.config.MTU
+	if mtu <= 0 {
+		mtu = 1500 // Default MTU
+	}
 
 	conf := TunTapConfig{
 		Name:       s.config.DeviceName,
 		DeviceType: s.config.DeviceType,
-		MTU:        s.config.MTU,
+		MTU:        mtu,
 	}
 
 	var err error
+	log.Printf("Creating TUN/TAP device with config: %+v", conf)
 	s.device, err = createTunTapDevice(conf)
 	if err != nil {
 		return fmt.Errorf("failed to create TUN/TAP device: %w", err)
 	}
+	log.Printf("TUN/TAP device created successfully")
 
+	log.Printf("Configuring TUN/TAP device...")
 	if err := s.configureDevice(); err != nil {
 		s.device.Close()
 		return fmt.Errorf("failed to configure TUN/TAP device: %w", err)
 	}
+	log.Printf("TUN/TAP device configured successfully")
+
+	log.Printf("EnableTCP: %v, EnableUDP: %v", s.config.EnableTCP, s.config.EnableUDP)
 
 	if s.config.EnableTCP {
+		log.Printf("Starting TCP server...")
 		if err := s.startTCPServer(); err != nil {
 			s.device.Close()
 			return fmt.Errorf("failed to start TCP server: %w", err)
@@ -109,6 +124,7 @@ func (s *OpenVPNServer) Start(ctx context.Context) error {
 	}
 
 	if s.config.EnableUDP {
+		log.Printf("Starting UDP server...")
 		if err := s.startUDPServer(); err != nil {
 			if s.listener != nil {
 				s.listener.Close()
@@ -376,8 +392,12 @@ func (s *OpenVPNServer) handleUDPServer() {
 
 // configureDevice configures the TUN/TAP device with IP address and routing
 func (s *OpenVPNServer) configureDevice() error {
-	// Set device MTU
-	if err := setDeviceMTU(s.device.Name(), s.config.MTU); err != nil {
+	// Set device MTU - use device's MTU (which has been validated and set to default if needed)
+	deviceMTU := s.device.MTU()
+	if deviceMTU <= 0 {
+		deviceMTU = 1500 // Fallback
+	}
+	if err := setDeviceMTU(s.device.Name(), deviceMTU); err != nil {
 		return fmt.Errorf("failed to set device MTU: %w", err)
 	}
 

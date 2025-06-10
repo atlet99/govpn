@@ -159,23 +159,36 @@ Development API server provides:
 ## Quick Start
 
 ### Prerequisites
-- Go 1.21 or later
+- Docker and Docker Compose
+- Go 1.21 or later (for building from source)
 - Linux/macOS/Windows
 - **For obfsproxy support**: obfsproxy or obfs4proxy installed
 
-### Installation Check
+### Docker Quick Start (Recommended)
+
 ```bash
-# Check if obfsproxy is installed and working
-./scripts/check_obfsproxy.sh
+# Clone the repository
+git clone https://github.com/atlet99/govpn.git
+cd govpn
 
-# Install obfsproxy if needed (macOS)
-brew install obfs4proxy
+# For quick demo with mock API
+docker-compose -f docker/docker-compose.demo.yml up -d
 
-# Install obfsproxy if needed (Ubuntu)
-sudo apt-get install obfsproxy
+# For testing real VPN server
+docker-compose up -d
+
+# For production with full infrastructure
+cd docker && docker-compose up -d
 ```
 
-### Installation
+**Access services:**
+- **Demo**: Web UI at http://localhost:3000, Mock API at http://localhost:8080
+- **Real VPN**: VPN at udp://localhost:1194, API at http://localhost:8081, Web at http://localhost:3000
+- **Production**: Full infrastructure with Keycloak, monitoring, etc.
+
+See [Docker Configurations](docker/CONFIGURATIONS.md) for detailed information.
+
+### Manual Installation
 
 ```bash
 # Clone the repository
@@ -190,6 +203,18 @@ go build -o govpn-client ./cmd/client
 
 # Build development API server
 go build -o govpn-dev-api ./cmd/dev-api
+```
+
+### Installation Check
+```bash
+# Check if obfsproxy is installed and working
+./scripts/check_obfsproxy.sh
+
+# Install obfsproxy if needed (macOS)
+brew install obfs4proxy
+
+# Install obfsproxy if needed (Ubuntu)
+sudo apt-get install obfsproxy
 ```
 
 ### Web Interface Development

@@ -125,6 +125,10 @@ func (s *Server) Stop() error {
 func (s *Server) registerRoutes() {
 	base := s.config.BaseURL
 
+	// Health check endpoint (no authentication required)
+	s.router.HandleFunc("/health", s.handleHealth)
+	s.router.HandleFunc(base+"/health", s.handleHealth)
+
 	// Authentication endpoints
 	s.router.HandleFunc(base+"/auth/login", s.handleLogin)
 	s.router.HandleFunc(base+"/auth/oidc", s.handleOIDCAuth)

@@ -12,34 +12,68 @@ log() {
 check_files() {
     log "Checking required files..."
     
-    # Check certificates
-    if [ ! -f "/etc/govpn/certs/ca.crt" ]; then
-        log "WARNING: CA certificate not found, generating self-signed certificates..."
+    # Check all required certificates
+    REQUIRED_CERTS="ca.crt server.crt server.key dh2048.pem"
+    MISSING_CERTS=""
+    
+    for cert in $REQUIRED_CERTS; do
+        if [ ! -f "/etc/govpn/certs/$cert" ]; then
+            MISSING_CERTS="$MISSING_CERTS $cert"
+        fi
+    done
+    
+    if [ -n "$MISSING_CERTS" ]; then
+        log "Missing certificates:$MISSING_CERTS"
+        log "Generating self-signed certificates..."
         /usr/local/bin/generate-certs.sh
+        
+        # Verify generation was successful
+        for cert in $REQUIRED_CERTS; do
+            if [ ! -f "/etc/govpn/certs/$cert" ]; then
+                log "ERROR: Failed to generate certificate: $cert"
+                exit 1
+            fi
+        done
+        log "All certificates generated successfully"
     fi
     
     # Check configuration
-    if [ ! -f "/etc/govpn/server.conf" ]; then
-        log "ERROR: Server configuration not found!"
-        exit 1
+    if [ ! -f "${GOVPN_CONFIG:-/etc/govpn/server.conf}" ]; then
+        log "WARNING: Default server configuration not found, will create runtime configuration"
     fi
     
     log "All required files are present"
 }
 
-# Create TUN device
-setup_tun() {
-    log "Setting up TUN device..."
+# Clean up any existing TUN interfaces
+cleanup_interfaces() {
+    log "Cleaning up existing TUN interfaces..."
     
-    # Create TUN device if it doesn't exist
+    # Remove any existing tun0 interface
+    if ip link show tun0 >/dev/null 2>&1; then
+        log "Removing existing tun0 interface..."
+        ip link delete tun0 2>/dev/null || true
+    fi
+    
+    log "Interface cleanup complete"
+}
+
+# Ensure TUN/TAP support is available
+setup_tun() {
+    log "Checking TUN/TAP support..."
+    
+    # Clean up first
+    cleanup_interfaces
+    
+    # Ensure /dev/net/tun exists for TUN/TAP support
     if [ ! -c /dev/net/tun ]; then
-        log "Creating /dev/net/tun device..."
+        log "Creating /dev/net/tun device node..."
         mkdir -p /dev/net
         mknod /dev/net/tun c 10 200
         chmod 600 /dev/net/tun
     fi
     
-    log "TUN device ready"
+    log "TUN/TAP support ready (Go code will create actual interface)"
 }
 
 # Network setup
@@ -47,12 +81,22 @@ setup_network() {
     log "Setting up network..."
     
     # Enable IP forwarding
-    echo 1 > /proc/sys/net/ipv4/ip_forward
+    if [ -w /proc/sys/net/ipv4/ip_forward ]; then
+        echo 1 > /proc/sys/net/ipv4/ip_forward
+        log "IP forwarding enabled"
+    else
+        log "WARNING: Cannot enable IP forwarding - check container privileges"
+    fi
     
     # Setup iptables rules
-    iptables -t nat -A POSTROUTING -s ${VPN_NETWORK:-10.8.0.0/24} -o eth0 -j MASQUERADE
-    iptables -A FORWARD -i tun0 -j ACCEPT
-    iptables -A FORWARD -o tun0 -j ACCEPT
+    if command -v iptables >/dev/null 2>&1; then
+        iptables -t nat -A POSTROUTING -s ${VPN_NETWORK:-10.8.0.0/24} -o eth0 -j MASQUERADE || log "WARNING: Failed to add NAT rule"
+        iptables -A FORWARD -i tun0 -j ACCEPT || log "WARNING: Failed to add forward rule"
+        iptables -A FORWARD -o tun0 -j ACCEPT || log "WARNING: Failed to add forward rule"
+        log "iptables rules configured"
+    else
+        log "WARNING: iptables not available"
+    fi
     
     log "Network setup complete"
 }
@@ -93,7 +137,7 @@ create_config() {
 port ${VPN_PORT:-1194}
 proto udp
 dev tun
-server ${VPN_NETWORK:-10.8.0.0 255.255.255.0}
+server ${VPN_NETWORK:-10.8.0.0/24}
 
 # API settings
 api-enabled true
@@ -155,8 +199,8 @@ EOF
 # Main function
 main() {
     log "GoVPN Server starting up..."
-    log "Version: $(govpn-server --version 2>/dev/null || echo 'unknown')"
-    log "Build: $(govpn-server --build-info 2>/dev/null || echo 'unknown')"
+    log "Version: $(/usr/local/bin/govpn-server --version 2>/dev/null || echo 'unknown')"
+    log "Build: $(/usr/local/bin/govpn-server --build-info 2>/dev/null || echo 'unknown')"
     
     # Checks and setup
     check_files
@@ -180,11 +224,21 @@ main() {
     fi
     
     # Start server
-    exec govpn-server --config /etc/govpn/runtime.conf
+    exec /usr/local/bin/govpn-server --config /etc/govpn/runtime.conf
 }
 
 # Signal handling
-trap 'log "Received shutdown signal, stopping..."; kill -TERM $PID' TERM INT
+cleanup_on_exit() {
+    log "Received shutdown signal, stopping..."
+    if [ ! -z "$PID" ]; then
+        kill -TERM $PID 2>/dev/null || true
+        wait $PID 2>/dev/null || true
+    fi
+    cleanup_interfaces
+    exit 0
+}
+
+trap cleanup_on_exit TERM INT
 
 # Start
 main "$@" &

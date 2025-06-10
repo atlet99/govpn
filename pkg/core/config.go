@@ -170,7 +170,7 @@ func DefaultConfig() Config {
 		ServerNetwork: "10.8.0.0/24",
 
 		// Device settings
-		DeviceName:  "tun0",
+		DeviceName:  "tun1",
 		DeviceType:  "tun",
 		MTU:         1500,
 		InternalDNS: false,

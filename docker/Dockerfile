@@ -62,8 +62,8 @@ EXPOSE 1194/udp 8080/tcp 9090/tcp
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
-# Switch to govpn user
-USER govpn
+# For VPN server we need root privileges
+# USER govpn
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]
