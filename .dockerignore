@@ -11,5 +11,4 @@
 .env.production.local
 bin
 docs/
-certs/
 deploy/

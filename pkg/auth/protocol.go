@@ -10,11 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 )
 
 const (
-	// OpenVPN protocol constants
+	// OpenVPN protocol constants (opcodes)
 	OpvnP_CONTROL_HARD_RESET_CLIENT_V1 byte = 1
 	OpvnP_CONTROL_HARD_RESET_SERVER_V1 byte = 2
 	OpvnP_CONTROL_SOFT_RESET_V1        byte = 3
@@ -23,6 +24,17 @@ const (
 	OpvnP_DATA_V1                      byte = 6
 	OpvnP_CONTROL_HARD_RESET_CLIENT_V2 byte = 7
 	OpvnP_CONTROL_HARD_RESET_SERVER_V2 byte = 8
+	OpvnP_DATA_V2                      byte = 9  // Data packet V2
+	OpvnP_CONTROL_HARD_RESET_CLIENT_V3 byte = 10 // Client hard reset V3
+
+	// OpenVPN 2.6+ extended opcodes
+	OpvnP_CONTROL_WKC_V1 byte = 11 // WKC (Wrapped Key Control)
+
+	// Additional opcodes for future compatibility
+	OpvnP_RESERVED_12 byte = 12
+	OpvnP_RESERVED_13 byte = 13
+	OpvnP_RESERVED_14 byte = 14
+	OpvnP_RESERVED_15 byte = 15
 
 	// Key constants
 	KEY_METHOD_2 byte = 2
@@ -37,9 +49,6 @@ const (
 var (
 	// ErrPacketTooSmall is returned when a packet is too small to be valid
 	ErrPacketTooSmall = errors.New("packet too small to be a valid OpenVPN packet")
-
-	// ErrInvalidPacketOpcode is returned when a packet has an invalid opcode
-	ErrInvalidPacketOpcode = errors.New("invalid OpenVPN packet opcode")
 
 	// ErrHMACVerificationFailed is returned when HMAC verification fails
 	ErrHMACVerificationFailed = errors.New("HMAC verification failed")
@@ -82,11 +91,20 @@ type PushOptions struct {
 // NewOpenVPNSession creates a new OpenVPN session
 func NewOpenVPNSession(tlsConfig *tls.Config, tlsAuthKey []byte) *OpenVPNSession {
 	sessionID := make([]byte, SESSION_ID_LENGTH)
-	if _, err := io.ReadFull(bytes.NewReader(tlsAuthKey[:SESSION_ID_LENGTH]), sessionID); err != nil {
-		// In case of error, use random data
+
+	// Check if tlsAuthKey has enough data for session ID
+	if len(tlsAuthKey) >= SESSION_ID_LENGTH {
+		if _, err := io.ReadFull(bytes.NewReader(tlsAuthKey[:SESSION_ID_LENGTH]), sessionID); err != nil {
+			// In case of error, use random data
+			if randErr := fillRandomBytes(sessionID); randErr != nil {
+				// Log the error but continue with potentially incomplete random data
+				log.Printf("Warning: Failed to generate secure random session ID: %v", randErr)
+			}
+		}
+	} else {
+		// TLS auth key too short or nil, generate random session ID
 		if randErr := fillRandomBytes(sessionID); randErr != nil {
-			// Log the error but continue with potentially incomplete random data
-			fmt.Printf("Warning: Failed to generate secure random session ID: %v\n", randErr)
+			log.Printf("Warning: Failed to generate secure random session ID: %v", randErr)
 		}
 	}
 
@@ -158,36 +176,83 @@ func (p *OpenVPNPacket) Marshal() ([]byte, error) {
 
 // Unmarshal deserializes an OpenVPN packet from bytes
 func (p *OpenVPNPacket) Unmarshal(data []byte) error {
-	if len(data) < 8 {
+	// Check minimum packet size - need at least opcode and keyID
+	if len(data) < 2 {
+		log.Printf("DEBUG: Packet too small: got %d bytes, need at least 2 bytes", len(data))
 		return ErrPacketTooSmall
+	}
+
+	// Accept 14-byte control packets as valid
+	if len(data) == 14 {
+		log.Printf("DEBUG: Accepting 14-byte control packet (standard OpenVPN)")
 	}
 
 	// Read opcode and key ID
 	p.Opcode = data[0]
 	p.KeyID = data[1]
 
-	// Validate opcode
-	if p.Opcode < OpvnP_CONTROL_HARD_RESET_CLIENT_V1 || p.Opcode > OpvnP_CONTROL_HARD_RESET_SERVER_V2 {
-		return ErrInvalidPacketOpcode
+	// Debug: log the opcode we received
+	log.Printf("DEBUG: Received OpenVPN packet with opcode: %d (0x%02x), keyID: %d, length: %d",
+		p.Opcode, p.Opcode, p.KeyID, len(data))
+
+	// Handle different packet types with variable sizes
+	// Some OpenVPN packets like ping/keepalive can be very short
+
+	// For very short packets (< 10 bytes), just fill with defaults
+	if len(data) < 2+SESSION_ID_LENGTH {
+		log.Printf("DEBUG: Short packet detected, likely ping/keepalive - using defaults")
+		p.SessionID = make([]byte, SESSION_ID_LENGTH)
+		p.PacketID = 0
+		p.PayloadLength = 0
+		p.Payload = []byte{}
+		return nil
 	}
 
-	// Read session ID
+	// Read session ID if available
 	p.SessionID = make([]byte, SESSION_ID_LENGTH)
 	copy(p.SessionID, data[2:2+SESSION_ID_LENGTH])
+
+	// Check if we have enough data for packet ID
+	if len(data) < 2+SESSION_ID_LENGTH+4 {
+		log.Printf("DEBUG: Packet too short for packet ID - using default")
+		p.PacketID = 0
+		p.PayloadLength = 0
+		p.Payload = []byte{}
+		return nil
+	}
 
 	// Read packet ID
 	p.PacketID = binary.BigEndian.Uint32(data[2+SESSION_ID_LENGTH : 6+SESSION_ID_LENGTH])
 
+	// Check if we have enough data for payload length
+	if len(data) < 2+SESSION_ID_LENGTH+4+2 {
+		log.Printf("DEBUG: Packet too short for payload length - using default")
+		p.PayloadLength = 0
+		p.Payload = []byte{}
+		return nil
+	}
+
 	// Read payload length
 	p.PayloadLength = binary.BigEndian.Uint16(data[6+SESSION_ID_LENGTH : 8+SESSION_ID_LENGTH])
 
-	// Read payload
-	if len(data) < 8+SESSION_ID_LENGTH+int(p.PayloadLength) {
-		return ErrPacketTooSmall
+	// Read payload if available
+	headerSize := 8 + SESSION_ID_LENGTH
+	if len(data) < headerSize+int(p.PayloadLength) {
+		log.Printf("DEBUG: Packet shorter than expected payload - adjusting payload length")
+		// Adjust payload length to what's actually available
+		actualPayloadSize := len(data) - headerSize
+		if actualPayloadSize < 0 {
+			actualPayloadSize = 0
+		}
+		p.PayloadLength = uint16(actualPayloadSize)
 	}
 
-	p.Payload = make([]byte, p.PayloadLength)
-	copy(p.Payload, data[8+SESSION_ID_LENGTH:8+SESSION_ID_LENGTH+int(p.PayloadLength)])
+	if p.PayloadLength > 0 && len(data) > headerSize {
+		p.Payload = make([]byte, p.PayloadLength)
+		copy(p.Payload, data[headerSize:headerSize+int(p.PayloadLength)])
+	} else {
+		p.Payload = []byte{}
+	}
 
 	return nil
 }

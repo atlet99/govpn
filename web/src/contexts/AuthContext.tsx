@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { LoginCredentials, User } from '@/types'
+import { apiClient } from '@/services/api'
 
 interface AuthContextType {
   user: User | null
@@ -36,11 +37,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const token = localStorage.getItem('token')
         if (token) {
-          // In a real application, there would be a request to verify the token
-          // const userData = await authService.getProfile()
+          apiClient.setToken(token)
+          // TODO: Verify token with real API call when implemented
+          // const userData = await apiClient.getProfile()
           // setUser(userData.data)
           
-          // Temporarily set mock user
+          // Temporarily keep mock user for now
           setUser({
             id: '1',
             username: 'admin',
@@ -71,40 +73,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if ('id' in data) {
         const mockToken = 'mock-jwt-token-' + Date.now()
         localStorage.setItem('token', mockToken)
+        apiClient.setToken(mockToken)
         setUser(data)
         navigate('/dashboard')
         return
       }
       
-      // Normal authentication by username/password
+      // Normal authentication via API
       const credentials = data as LoginCredentials
-      if (credentials.username === 'admin' && credentials.password === 'admin123') {
-        const mockToken = 'mock-jwt-token-' + Date.now()
-        localStorage.setItem('token', mockToken)
-        
-        const mockUser: User = {
-          id: '1',
-          username: credentials.username,
-          email: 'admin@govpn.com',
-          role: 'admin',
-          status: 'active',
-          lastLogin: new Date().toISOString(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-        
-        setUser(mockUser)
+      const response = await apiClient.login(credentials.username, credentials.password)
+      
+      if (response.success && response.data) {
+        localStorage.setItem('token', response.data.token)
+        apiClient.setToken(response.data.token)
+        setUser(response.data.user)
         navigate('/dashboard')
       } else {
-        throw new Error('Invalid credentials')
+        throw new Error(response.error || 'Login failed')
       }
-      
-      // In a real application:
-      // const response = await authService.login(credentials)
-      // localStorage.setItem('token', response.data.token)
-      // const userData = await authService.getProfile()
-      // setUser(userData.data)
-      // navigate('/dashboard')
     } catch (error) {
       console.error('Login failed:', error)
       throw error
@@ -115,6 +101,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = () => {
     localStorage.removeItem('token')
+    apiClient.clearToken()
     setUser(null)
     navigate('/login')
   }

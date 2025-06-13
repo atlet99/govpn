@@ -180,11 +180,11 @@ export function AppThemeProvider({ children }: ThemeProviderProps) {
   const [mode, setMode] = useState<ThemeMode>(() => {
     // Load user's personal theme preference from localStorage
     const savedTheme = localStorage.getItem('govpn-theme-preference') as ThemeMode
-    return savedTheme || 'dark' // Default to dark theme
+    return savedTheme || 'auto' // Default to auto theme
   })
 
   // Determine effective theme mode (resolve 'auto')
-  const effectiveMode = mode === 'auto' ? (prefersDarkMode ? 'dark' : 'soft-light') : mode
+  const effectiveMode = mode === 'auto' ? (prefersDarkMode ? 'dark' : 'light') : mode
   const theme = createAppTheme(effectiveMode as 'light' | 'dark' | 'soft-light')
 
   // Save theme preference to localStorage whenever it changes

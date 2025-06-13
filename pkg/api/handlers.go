@@ -1002,3 +1002,64 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
 }
+
+// handlePublicStatus returns server status without authentication
+func (s *Server) handlePublicStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Mock server status data (replace with real data later)
+	status := map[string]interface{}{
+		"status":            "running",
+		"uptime":            "3 minutes",
+		"connected_clients": 3,
+		"traffic":           "1.2 MB",
+		"last_updated":      time.Now().Format(time.RFC3339),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	_ = json.NewEncoder(w).Encode(status)
+}
+
+// handlePublicClients returns client list without authentication
+func (s *Server) handlePublicClients(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Mock client data (replace with real data later)
+	clients := []map[string]interface{}{
+		{
+			"id":           "client-001",
+			"username":     "user1@example.com",
+			"ip":           "10.8.0.2",
+			"connected_at": time.Now().Add(-30 * time.Minute).Format(time.RFC3339),
+			"bytes_in":     262144,
+			"bytes_out":    524288,
+		},
+		{
+			"id":           "client-002",
+			"username":     "user2@example.com",
+			"ip":           "10.8.0.3",
+			"connected_at": time.Now().Add(-15 * time.Minute).Format(time.RFC3339),
+			"bytes_in":     131072,
+			"bytes_out":    262144,
+		},
+		{
+			"id":           "client-003",
+			"username":     "user3@example.com",
+			"ip":           "10.8.0.4",
+			"connected_at": time.Now().Add(-5 * time.Minute).Format(time.RFC3339),
+			"bytes_in":     65536,
+			"bytes_out":    131072,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	_ = json.NewEncoder(w).Encode(clients)
+}

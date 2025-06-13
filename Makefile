@@ -18,6 +18,12 @@ GOPATH ?= $(shell go env GOPATH)
 GOLANGCI_LINT = $(GOPATH)/bin/golangci-lint
 STATICCHECK = $(GOPATH)/bin/staticcheck
 
+# Docker-specific variables
+DOCKER_COMPOSE_FILE := docker/docker-compose.full.yml
+DOCKER_COMPOSE_CMD := docker-compose -f $(DOCKER_COMPOSE_FILE)
+DOCKER_SERVER_IMAGE := docker-govpn-server
+DOCKER_CLIENT_IMAGE := docker-govpn-test-client
+
 # Ensure the output directory exists
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
@@ -201,8 +207,9 @@ lint:
 	@if command -v $(GOLANGCI_LINT) >/dev/null 2>&1; then \
 		echo "Running linter..."; \
 		$(GOLANGCI_LINT) run; \
+		echo "Linter passed!"; \
 	else \
-		echo "⚠️  golangci-lint is not installed. Skipping linter. Run 'make install-lint' to install."; \
+		echo "golangci-lint is not installed. Skipping linter. Run 'make install-lint' to install."; \
 	fi
 
 # Run staticcheck tool
@@ -213,12 +220,12 @@ staticcheck:
 		$(STATICCHECK) ./...; \
 		echo "Staticcheck passed!"; \
 	else \
-		echo "⚠️  staticcheck is not installed. Skipping staticcheck. Run 'make install-staticcheck' to install."; \
+		echo "staticcheck is not installed. Skipping staticcheck. Run 'make install-staticcheck' to install."; \
 	fi
 
 # Run all checks (linter and staticcheck)
 .PHONY: check-all
-check-all: lint staticcheck
+check-all: lint staticcheck web-check
 	@echo "All checks completed."
 
 # Run linter with auto-fix
@@ -239,6 +246,134 @@ test-coverage:
 benchmark:
 	@echo "Running benchmarks..."
 	go test -bench=. -benchmem ./... 
+
+# Test database
+.PHONY: createdb-test
+createdb-test:
+	@echo "Ensuring test database exists..."
+	@psql -lqt | cut -d \| -f 1 | grep -qw govpn_test || createdb govpn_test
+
+# Migrate test database
+.PHONY: migrate-testdb
+migrate-testdb: createdb-test
+	@echo "Applying migrations to test database..."
+	psql -d govpn_test -f pkg/storage/postgres/migrations/000001_init_test.up.sql
+
+# Web check
+.PHONY: web-check
+web-check:
+	@echo "Checking web build..."
+	@cd $(WEB_DIR) && npm run type-check
+	@echo "Web check completed!"
+
+# ============================================================================
+# Docker Operations
+# ============================================================================
+
+# Build Docker images
+.PHONY: docker-build
+docker-build:
+	@echo "Building GoVPN Docker images..."
+	$(DOCKER_COMPOSE_CMD) build govpn-server
+
+# Build Docker images without cache
+.PHONY: docker-build-clean
+docker-build-clean:
+	@echo "Building GoVPN Docker images (no cache)..."
+	$(DOCKER_COMPOSE_CMD) build --no-cache --pull govpn-server
+
+# Start Docker services
+.PHONY: docker-up
+docker-up:
+	@echo "Starting GoVPN Docker services..."
+	$(DOCKER_COMPOSE_CMD) up -d
+	@echo "Services started successfully!"
+	@echo ""
+	@echo "Access points:"
+	@echo "  GoVPN API:      http://localhost:8081"
+	@echo "  GoVPN Metrics:  http://localhost:9090"
+	@echo "  VPN Server:     localhost:1194 (UDP)"
+
+# Stop Docker services
+.PHONY: docker-down
+docker-down:
+	@echo "Stopping GoVPN Docker services..."
+	$(DOCKER_COMPOSE_CMD) down
+
+# Restart Docker services
+.PHONY: docker-restart
+docker-restart: docker-down docker-up
+
+# Show Docker logs
+.PHONY: docker-logs
+docker-logs:
+	@echo "Showing GoVPN server logs..."
+	$(DOCKER_COMPOSE_CMD) logs -f govpn-server
+
+# Show Docker logs (all services)
+.PHONY: docker-logs-all
+docker-logs-all:
+	@echo "Showing all service logs..."
+	$(DOCKER_COMPOSE_CMD) logs -f
+
+# Get shell access to GoVPN container
+.PHONY: docker-shell
+docker-shell:
+	@echo "Opening shell in GoVPN container..."
+	docker exec -it govpn-real-server sh
+
+# Check Docker service status
+.PHONY: docker-status
+docker-status:
+	@echo "Docker service status:"
+	$(DOCKER_COMPOSE_CMD) ps
+
+# Clean Docker images and containers
+.PHONY: docker-clean
+docker-clean:
+	@echo "Cleaning Docker containers and images..."
+	$(DOCKER_COMPOSE_CMD) down
+	docker image rm $(DOCKER_SERVER_IMAGE) -f 2>/dev/null || true
+	docker image rm $(DOCKER_CLIENT_IMAGE) -f 2>/dev/null || true
+	@echo "Docker cleanup completed."
+
+# Full Docker cleanup (images, volumes, system)
+.PHONY: docker-clean-full
+docker-clean-full:
+	@echo "Performing full Docker cleanup..."
+	@echo "This will remove all containers, volumes and images!"
+	$(DOCKER_COMPOSE_CMD) down -v --rmi all 2>/dev/null || true
+	docker system prune -f
+	@echo "Full Docker cleanup completed."
+
+# Test Docker setup with OpenVPN client
+.PHONY: docker-test
+docker-test:
+	@echo "Testing GoVPN Docker setup..."
+	@echo "Running OpenVPN client test (10 second timeout)..."
+	timeout 10 docker run --rm --network docker_govpn-full-network --cap-add=NET_ADMIN --device /dev/net/tun $(DOCKER_CLIENT_IMAGE) openvpn --config /etc/govpn/client/client.ovpn --verb 3 || echo "Test completed (expected timeout)"
+	@echo ""
+	@echo "Check server logs for connection attempts:"
+	@echo "  make docker-logs"
+
+# Build and test complete Docker setup
+.PHONY: docker-dev-setup
+docker-dev-setup: docker-clean-full docker-build-clean docker-up
+	@echo "Waiting for services to start..."
+	@sleep 5
+	@echo ""
+	@echo "Docker development environment ready!"
+	@echo ""
+	@echo "Next steps:"
+	@echo "1. Check logs: make docker-logs"
+	@echo "2. Test setup: make docker-test"
+	@echo "3. Access API: http://localhost:8081"
+
+# Quick restart only GoVPN server
+.PHONY: docker-restart-server
+docker-restart-server:
+	@echo "Restarting GoVPN server..."
+	$(DOCKER_COMPOSE_CMD) restart govpn-server
 
 # Display help information
 .PHONY: help
@@ -263,6 +398,9 @@ help:
 	@echo "  build-client        - Build client only"
 	@echo "  build-certs         - Build certificate generator only"
 	@echo "  build-cross         - Build binaries for multiple platforms"
+	@echo "  build-web           - Build web application"
+	@echo "  createdb-test       - Create test database"
+	@echo "  migrate-testdb      - Migrate test database"
 	@echo ""
 	@echo "  Testing:"
 	@echo "  ========="
@@ -270,6 +408,7 @@ help:
 	@echo "  test-with-race      - Run all tests with race detection and coverage"
 	@echo "  test-coverage       - Run tests with coverage report"
 	@echo "  benchmark           - Run benchmarks"
+	@echo "  web-check           - Check web build"
 	@echo ""
 	@echo "  Code Quality:"
 	@echo "  ============="
@@ -294,19 +433,24 @@ help:
 	@echo "  clean-certs         - Clean generated certificates"
 	@echo "  clean-web           - Clean web build artifacts"
 	@echo ""
+	@echo "  Docker Operations:"
+	@echo "  ================="
+	@echo "  docker-build        - Build Docker images"
+	@echo "  docker-up           - Start Docker services"
+	@echo "  docker-down         - Stop Docker services"
+	@echo "  docker-restart      - Restart Docker services"
+	@echo "  docker-clean        - Clean Docker images and containers"
+	@echo "  docker-clean-full   - Full Docker cleanup (images, volumes, system)"
+	@echo "  docker-logs         - Show Docker logs"
+	@echo "  docker-test         - Test Docker setup with OpenVPN client"
+	@echo "  docker-shell        - Get shell access to GoVPN container"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make dev-setup      - Set up development environment"
 	@echo "  make dev-start      - Start development environment"
 	@echo "  make build          - Build all binaries"
 	@echo "  make test           - Run tests"
 	@echo "  make check-all      - Run all code quality checks"
-
-.PHONY: createdb-test
-createdb-test:
-	@echo "Ensuring test database exists..."
-	@psql -lqt | cut -d \| -f 1 | grep -qw govpn_test || createdb govpn_test
-
-.PHONY: migrate-testdb
-migrate-testdb: createdb-test
-	@echo "Applying migrations to test database..."
-	psql -d govpn_test -f pkg/storage/postgres/migrations/000001_init_test.up.sql
+	@echo "  make docker-build   - Build Docker images"
+	@echo "  make docker-up      - Start Docker services"
+	@echo "  make docker-test    - Test Docker setup"

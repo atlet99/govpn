@@ -32,7 +32,7 @@ import {
   Error as ErrorIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { apiClient } from '@/services/api'
 
 interface SystemStats {
   activeConnections: number
@@ -46,6 +46,14 @@ interface SystemStats {
   networkLatency: number
 }
 
+interface AlertData {
+  id: string
+  type: 'success' | 'warning' | 'error' | 'info'
+  title: string
+  message: string
+  timestamp: string
+}
+
 interface Connection {
   id: string
   username: string
@@ -56,13 +64,6 @@ interface Connection {
   bytesOut: number
   obfuscationMethod: string
   status: 'active' | 'idle' | 'disconnecting'
-}
-
-interface SecurityAlert {
-  id: string
-  type: 'warning' | 'error' | 'info'
-  message: string
-  timestamp: string
 }
 
 const StatCard = ({ 
@@ -136,234 +137,108 @@ const StatCard = ({
 export default function Dashboard() {
   const { t } = useTranslation()
   const [stats, setStats] = useState<SystemStats>({
-    activeConnections: 156,
-    totalUsers: 342,
-    securityScore: 98,
-    averageSpeed: 85.4,
+    activeConnections: 0,
+    totalUsers: 0,
+    securityScore: 95,
+    averageSpeed: 0,
     storageUsed: 45,
     obfuscationActive: true,
     dpiDetected: false,
-    uptime: '15 days 4 hours',
+    uptime: '0 minutes',
     networkLatency: 12,
   })
 
-  const [connections, setConnections] = useState<Connection[]>([
-    {
-      id: '1',
-      username: 'john.doe',
-      ip: '192.168.1.100',
-      country: 'US',
-      connected: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-      bytesIn: 1024 * 1024 * 150,
-      bytesOut: 1024 * 1024 * 89,
-      obfuscationMethod: 'TLS Tunnel',
-      status: 'active',
-    },
-    {
-      id: '2',
-      username: 'jane.smith',
-      ip: '192.168.1.101',
-      country: 'DE',
-      connected: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45 minutes ago
-      bytesIn: 1024 * 1024 * 67,
-      bytesOut: 1024 * 1024 * 23,
-      obfuscationMethod: 'HTTP Mimicry',
-      status: 'active',
-    },
-    {
-      id: '3',
-      username: 'bob.wilson',
-      ip: '192.168.1.102',
-      country: 'CN',
-      connected: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 hour ago
-      bytesIn: 1024 * 1024 * 234,
-      bytesOut: 1024 * 1024 * 156,
-      obfuscationMethod: 'DNS Tunnel',
-      status: 'idle',
-    },
-  ])
-
-  // Base notification data (without translations)
-  const [alertsData, setAlertsData] = useState<Array<{
-    id: string
-    type: 'warning' | 'error' | 'info'
-    messageKey: string
-    params: Record<string, string>
-    timestamp: string
-  }>>([
-    {
-      id: '1',
-      type: 'warning',
-      messageKey: 'dashboard.securityAlerts.dpiDetected',
-      params: { region: 'CN' },
-      timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 minutes ago
-    },
-    {
-      id: '2',
-      type: 'info',
-      messageKey: 'dashboard.securityAlerts.obfuscationSwitched',
-      params: { username: 'bob.wilson' },
-      timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(), // 12 minutes ago
-    },
-    {
-      id: '3',
-      type: 'error',
-      messageKey: 'dashboard.securityAlerts.connectionBlocked',
-      params: { ip: '192.168.1.200' },
-      timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(), // 25 minutes ago
-    },
-    {
-      id: '4',
-      type: 'warning',
-      messageKey: 'dashboard.securityAlerts.authFailure',
-      params: { ip: '10.0.0.15' },
-      timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // 45 minutes ago
-    },
-  ])
-
+  const [connections, setConnections] = useState<Connection[]>([])
   const [isUpdating, setIsUpdating] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState(new Date())
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const [alertsData, setAlertsData] = useState<AlertData[]>([])
 
-  // Generate localized notifications dynamically
-  const alerts: SecurityAlert[] = alertsData.map(alert => ({
-    id: alert.id,
-    type: alert.type,
-    message: t(alert.messageKey, alert.params),
-    timestamp: alert.timestamp,
-  }))
+  // Load real data from API
+  const loadData = useCallback(async () => {
+    try {
+      setIsUpdating(true)
 
-  // Functions for generating random data
-  const generateRandomStats = useCallback((): SystemStats => {
-    const baseStats = {
-      activeConnections: Math.floor(Math.random() * 50) + 120, // 120-170
-      totalUsers: Math.floor(Math.random() * 100) + 300, // 300-400
-      securityScore: Math.floor(Math.random() * 10) + 90, // 90-100
-      averageSpeed: Math.floor(Math.random() * 30) + 70, // 70-100
-      storageUsed: Math.floor(Math.random() * 30) + 40, // 40-70
-      obfuscationActive: Math.random() > 0.1, // 90% chance active
-      dpiDetected: Math.random() < 0.2, // 20% chance detected
-      uptime: '15 days 4 hours', // Keep static for now
-      networkLatency: Math.floor(Math.random() * 20) + 5, // 5-25ms
-    }
-    return baseStats
-  }, [])
+      // Load server status
+      const statusResponse = await apiClient.getStatus()
+      if (statusResponse.success && statusResponse.data) {
+        const serverStatus = statusResponse.data
+        setStats(prev => ({
+          ...prev,
+          activeConnections: serverStatus.clientCount || 0,
+          uptime: serverStatus.startTime ? formatUptime(Date.now() - Number(serverStatus.startTime) * 1000) : 'Unknown',
+        }))
+      }
 
-  const generateRandomConnection = useCallback((): Connection => {
-    const usernames = ['alice.cooper', 'mike.johnson', 'sarah.connor', 'david.smith', 'emma.watson']
-    const countries = ['US', 'DE', 'FR', 'JP', 'CA', 'AU', 'UK', 'NL']
-    const methods = ['TLS Tunnel', 'HTTP Mimicry', 'DNS Tunnel', 'XOR Obfuscation']
-    const statuses: ('active' | 'idle' | 'disconnecting')[] = ['active', 'idle', 'disconnecting']
-    
-    const username = usernames[Math.floor(Math.random() * usernames.length)]
-    const country = countries[Math.floor(Math.random() * countries.length)]
-    const method = methods[Math.floor(Math.random() * methods.length)]
-    const status = statuses[Math.floor(Math.random() * statuses.length)]
-    
-    return {
-      id: Math.random().toString(36).substr(2, 9),
-      username: username || 'unknown',
-      ip: `192.168.1.${Math.floor(Math.random() * 200) + 50}`,
-      country: country || 'US',
-      connected: new Date(Date.now() - Math.random() * 4 * 60 * 60 * 1000).toISOString(),
-      bytesIn: Math.floor(Math.random() * 500) * 1024 * 1024,
-      bytesOut: Math.floor(Math.random() * 200) * 1024 * 1024,
-      obfuscationMethod: method || 'TLS Tunnel',
-      status: status || 'active',
-    }
-  }, [])
+      // Load connections
+      const connectionsResponse = await apiClient.getConnections()
+      if (connectionsResponse.success && connectionsResponse.data) {
+        const apiConnections = connectionsResponse.data.map(conn => ({
+          id: conn.id,
+          username: conn.username,
+          ip: conn.virtualIP,
+          country: conn.location || 'Unknown',
+          connected: conn.connectedAt,
+          bytesIn: conn.bytesIn,
+          bytesOut: conn.bytesOut,
+          obfuscationMethod: conn.obfuscationMethod || 'None',
+          status: conn.status === 'connected' ? 'active' as const : 'idle' as const,
+        }))
+        setConnections(apiConnections)
+      }
 
-  const generateRandomAlert = useCallback(() => {
-    const alertTypes = [
-      {
-        type: 'warning' as const,
-        messageKey: 'dashboard.securityAlerts.dpiDetected',
-        params: { region: ['CN', 'RU', 'IR', 'TR'][Math.floor(Math.random() * 4)] || 'CN' },
-      },
-      {
-        type: 'info' as const,
-        messageKey: 'dashboard.securityAlerts.obfuscationSwitched',
-        params: { username: ['alice.cooper', 'mike.johnson', 'sarah.connor'][Math.floor(Math.random() * 3)] || 'unknown' },
-      },
-      {
-        type: 'error' as const,
-        messageKey: 'dashboard.securityAlerts.connectionBlocked',
-        params: { ip: `192.168.1.${Math.floor(Math.random() * 200) + 50}` },
-      },
-      {
-        type: 'warning' as const,
-        messageKey: 'dashboard.securityAlerts.authFailure',
-        params: { ip: `10.0.0.${Math.floor(Math.random() * 200) + 10}` },
-      },
-      {
-        type: 'info' as const,
-        messageKey: 'dashboard.securityAlerts.newConnection',
-        params: { 
-          country: ['United States', 'Germany', 'France', 'Japan'][Math.floor(Math.random() * 4)] || 'United States',
-          ip: `192.168.1.${Math.floor(Math.random() * 200) + 50}`
-        },
-      },
-    ]
-    
-    const randomAlert = alertTypes[Math.floor(Math.random() * alertTypes.length)]
-    if (!randomAlert) {
-      return {
+      // Load users count
+      const usersResponse = await apiClient.getUsers()
+      if (usersResponse.success && usersResponse.data && Array.isArray(usersResponse.data)) {
+        setStats(prev => ({
+          ...prev,
+          totalUsers: usersResponse.data!.length,
+        }))
+      }
+
+      setLastUpdate(new Date())
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error)
+      // Add error alert
+      const errorAlert: AlertData = {
         id: Math.random().toString(36).substr(2, 9),
-        type: 'info' as const,
-        messageKey: 'dashboard.securityAlerts.dpiDetected',
-        params: { region: 'CN' },
+        type: 'error',
+        title: 'Connection Error',
+        message: 'Failed to load dashboard data from server',
         timestamp: new Date().toISOString(),
       }
-    }
-    
-    return {
-      id: Math.random().toString(36).substr(2, 9),
-      type: randomAlert.type,
-      messageKey: randomAlert.messageKey,
-      params: randomAlert.params,
-      timestamp: new Date().toISOString(),
+      setAlertsData(prev => [errorAlert, ...prev.slice(0, 3)])
+    } finally {
+      setIsUpdating(false)
     }
   }, [])
 
-  // Data update function
-  const updateData = useCallback(() => {
-    setIsUpdating(true)
-    
-    // Update statistics
-    setStats(generateRandomStats())
-    
-    // Sometimes add new connection
-    if (Math.random() < 0.3) {
-      setConnections(prev => {
-        const newConnection = generateRandomConnection()
-        const updated = [newConnection, ...prev.slice(0, 4)] // Keep max 5 connections
-        return updated
-      })
-    } else {
-      // Update traffic for existing connections
-      setConnections(prev => prev.map(conn => ({
-        ...conn,
-        bytesIn: conn.bytesIn + Math.floor(Math.random() * 10) * 1024 * 1024,
-        bytesOut: conn.bytesOut + Math.floor(Math.random() * 5) * 1024 * 1024,
-      })))
-    }
-    
-    // Sometimes add new notification
-    if (Math.random() < 0.4) {
-      const newAlert = generateRandomAlert()
-      setAlertsData(prev => [newAlert, ...prev.slice(0, 3)]) // Keep max 4 notifications
-    }
-    
-    setLastUpdate(new Date())
-    
-    // Remove update indicator after short time
-    setTimeout(() => setIsUpdating(false), 500)
-  }, [generateRandomStats, generateRandomConnection, generateRandomAlert])
-
-  // Auto-update every 5 seconds
+  // Initial load
   useEffect(() => {
-    const interval = setInterval(updateData, 5000)
+    loadData()
+  }, [loadData])
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData()
+    }, 10000)
     return () => clearInterval(interval)
-  }, [updateData])
+  }, [loadData])
+
+  const formatUptime = (milliseconds: number) => {
+    const seconds = Math.floor(milliseconds / 1000)
+    const minutes = Math.floor(seconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const days = Math.floor(hours / 24)
+
+    if (days > 0) {
+      return `${days} days ${hours % 24} hours`
+    } else if (hours > 0) {
+      return `${hours} hours ${minutes % 60} minutes`
+    } else {
+      return `${minutes} minutes`
+    }
+  }
 
   const formatBytes = (bytes: number) => {
     const sizes = ['B', 'KB', 'MB', 'GB']
@@ -372,8 +247,24 @@ export default function Dashboard() {
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
   }
 
+  const formatRelativeTime = (timestamp: string) => {
+    const now = new Date()
+    const time = new Date(timestamp)
+    const diffInMinutes = Math.floor((now.getTime() - time.getTime()) / (1000 * 60))
+
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m ago`
+    } else if (diffInMinutes < 24 * 60) {
+      const hours = Math.floor(diffInMinutes / 60)
+      return `${hours}h ago`
+    } else {
+      const days = Math.floor(diffInMinutes / (24 * 60))
+      return `${days}d ago`
+    }
+  }
+
   const handleRefresh = () => {
-    updateData()
+    loadData()
   }
 
   return (
@@ -495,16 +386,23 @@ export default function Dashboard() {
                 {t('dashboard.securityNotifications')}
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {alerts.map((alert, index) => (
+                {alertsData.map((alert, index) => (
                   <Fade in={true} timeout={300 + index * 100} key={alert.id}>
                     <Alert 
                       severity={alert.type}
                       sx={{ fontSize: '0.875rem' }}
                     >
-                      <Box>
-                        <Typography variant="body2">{alert.message}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatRelativeTime(alert.timestamp, t)}
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body2" color="text.primary" sx={{ fontWeight: 500 }}>
+                            {alert.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {alert.message}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 1, whiteSpace: 'nowrap' }}>
+                          {formatRelativeTime(alert.timestamp)}
                         </Typography>
                       </Box>
                     </Alert>
@@ -547,7 +445,7 @@ export default function Dashboard() {
                       </Typography>
                     </TableCell>
                     <TableCell>{connection.country}</TableCell>
-                    <TableCell>{formatRelativeTime(connection.connected, t)}</TableCell>
+                    <TableCell>{formatRelativeTime(connection.connected)}</TableCell>
                     <TableCell>
                       <Typography variant="body2">
                         {formatBytes(connection.bytesIn)} / {formatBytes(connection.bytesOut)}

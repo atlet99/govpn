@@ -31,7 +31,7 @@ export default function Login() {
 
     try {
       // Simple validation for demo
-      if (username === 'admin' && password === 'password') {
+      if (username === 'admin' && password === 'admin123') {
         const mockUser = {
           id: '1',
           username: 'admin',
@@ -138,18 +138,6 @@ export default function Login() {
             >
               {loading ? t('common.loading') : t('auth.loginButton')}
             </Button>
-          </Box>
-
-          <Box sx={{ mt: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              Demo credentials:
-            </Typography>
-            <Typography variant="body2" fontFamily="monospace">
-              Username: admin
-            </Typography>
-            <Typography variant="body2" fontFamily="monospace">
-              Password: admin123
-            </Typography>
           </Box>
         </Paper>
       </Box>

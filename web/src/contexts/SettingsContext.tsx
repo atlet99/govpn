@@ -45,7 +45,7 @@ const defaultSettings: AppSettings = {
   logRetentionDays: 30,
   backupEnabled: true,
   language: 'en',
-  theme: 'dark',
+  theme: 'auto',
   notifications: true,
 }
 

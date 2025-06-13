@@ -523,9 +523,16 @@ func (s *OpenVPNServer) handleUDPPacket(packet []byte, addr *net.UDPAddr) {
 
 	sessionInterface, exists := s.sessions.Load(sessionKey)
 
+	debugLength := len(packet)
+	if debugLength > 16 {
+		debugLength = 16
+	}
+	log.Printf("DEBUG: Received UDP packet from %s, length: %d, first bytes: %x",
+		addr, len(packet), packet[:debugLength])
+
 	opvnPacket := &auth.OpenVPNPacket{}
 	if err := opvnPacket.Unmarshal(packet); err != nil {
-		log.Printf("Error parsing OpenVPN packet: %v", err)
+		log.Printf("Error parsing OpenVPN packet from %s: %v", addr, err)
 		return
 	}
 

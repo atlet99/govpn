@@ -2,8 +2,8 @@ export interface User {
   id: string
   username: string
   email: string
-  role: 'admin' | 'user'
-  status: 'active' | 'inactive'
+  role: 'admin' | 'user' | 'viewer'
+  status: 'active' | 'inactive' | 'suspended'
   lastLogin: string
   createdAt: string
   updatedAt: string

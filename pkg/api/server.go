@@ -129,6 +129,10 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("/health", s.handleHealth)
 	s.router.HandleFunc(base+"/health", s.handleHealth)
 
+	// Public monitoring endpoints (no authentication required)
+	s.router.HandleFunc("/status", s.handlePublicStatus)
+	s.router.HandleFunc("/clients", s.handlePublicClients)
+
 	// Authentication endpoints
 	s.router.HandleFunc(base+"/auth/login", s.handleLogin)
 	s.router.HandleFunc(base+"/auth/oidc", s.handleOIDCAuth)

@@ -1,0 +1,45 @@
+# GoVPN Client Container
+FROM alpine:3.19
+
+# Install dependencies
+RUN apk add --no-cache \
+    openvpn \
+    curl \
+    iproute2 \
+    iptables \
+    bash \
+    bind-tools \
+    iputils \
+    tcpdump \
+    openssl
+
+# Create necessary directories
+RUN mkdir -p /etc/govpn/client /var/log/govpn /var/lib/govpn
+
+# Copy client configuration
+COPY docker/configs/client.ovpn /etc/govpn/client/client.ovpn
+COPY certs/ca.crt /etc/govpn/client/ca.crt
+COPY certs/client.crt /etc/govpn/client/client.crt
+COPY certs/client.key /etc/govpn/client/client.key
+
+# Copy client scripts
+COPY docker/scripts/client-connect.sh /usr/local/bin/client-connect.sh
+COPY docker/scripts/client-monitor.sh /usr/local/bin/client-monitor.sh
+COPY docker/scripts/test-client.sh /usr/local/bin/test-client.sh
+
+# Make scripts executable
+RUN chmod +x /usr/local/bin/client-connect.sh /usr/local/bin/client-monitor.sh /usr/local/bin/test-client.sh
+
+# Create govpn user
+RUN addgroup -g 1000 govpn && \
+    adduser -D -H -u 1000 -G govpn govpn
+
+# Set permissions
+RUN chown -R govpn:govpn /etc/govpn /var/log/govpn /var/lib/govpn
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD /usr/local/bin/client-monitor.sh
+
+# Default command
+CMD ["/usr/local/bin/client-connect.sh"] 
